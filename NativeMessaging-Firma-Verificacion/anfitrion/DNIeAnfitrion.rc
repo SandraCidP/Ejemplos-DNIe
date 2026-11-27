@@ -1,0 +1,116 @@
+// ============================================================================
+//  DNIeAnfitrion.rc  -  Recursos incrustados en el .exe
+// ============================================================================
+//  Un archivo .rc describe datos que el compilador de recursos (rc.exe) mete
+//  dentro del .exe. Aquí hay tres:
+//
+//    1. El cuadro de diálogo donde el usuario escribe el PIN del DNIe.
+//    2. La imagen del candado (res\seguro.ico) que se muestra en ese diálogo.
+//    3. Los datos de versión: desarrollador, descripción y número de versión.
+// ============================================================================
+
+// Este archivo está guardado en UTF-8: se lo indicamos a rc.exe para que los
+// acentos de los textos del diálogo se vean bien.
+#pragma code_page(65001)
+
+#include <windows.h>
+#include "resource.h"
+
+// ----------------------------------------------------------------------------
+//  1. Cuadro de diálogo del PIN
+// ----------------------------------------------------------------------------
+//  Las coordenadas van en "unidades de diálogo" (no en píxeles), que Windows
+//  escala según el tipo de letra; así el diálogo se ve bien en cualquier
+//  pantalla. El código que lo maneja está en PinDialog.cpp.
+//
+//    ES_PASSWORD     muestra puntos en lugar de los caracteres escritos.
+//    ES_AUTOHSCROLL  permite escribir más texto del que cabe a la vista.
+//    DS_CENTER       centra el diálogo;  DS_SETFOREGROUND lo trae al frente
+//                    (importante: si no, puede quedar oculto tras el navegador).
+//    DS_MODALFRAME   marco de cuadro de diálogo (no se puede redimensionar).
+//    WS_POPUP | WS_CAPTION | WS_SYSMENU
+//                    ventana independiente, con barra de título y botón X.
+//    DS_SHELLFONT + FONT 9, "Segoe UI"
+//                    el tipo de letra de los diálogos actuales de Windows.
+//
+//  El orden de los controles importa: al abrirse el diálogo, el cursor se
+//  coloca en el primero que tenga WS_TABSTOP (aquí, la casilla del PIN), y la
+//  tecla Tab los recorre en este orden.
+// ----------------------------------------------------------------------------
+IDD_PIN DIALOGEX 0, 0, 270, 126
+STYLE DS_MODALFRAME | DS_CENTER | DS_SETFOREGROUND | DS_SHELLFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "DNI electrónico - PIN"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    // Hueco para la imagen del candado: un control "Static" de tipo icono,
+    // vacío. La imagen se la pone PinDialog.cpp al crear el diálogo, para
+    // poder elegir su tamaño (48 píxeles con la escala de pantalla al 100 %,
+    // y proporcionalmente más con escalas mayores); el control se ajusta solo al
+    // tamaño del icono, por eso aquí el ancho y el alto son 0.
+    CONTROL         "", IDC_PIN_ICON, "Static", SS_ICON, 12, 12, 0, 0
+
+    // Frase inicial. PinDialog.cpp la sustituye al crear el diálogo por la
+    // que nombra la versión del DNIe ("...de su DNIe 4.0..."), si se conoce.
+    // Se muestra más grande y en azul, como en los diálogos de Windows.
+    LTEXT           "Introduzca el PIN de su DNIe para firmar", IDC_PIN_PROMPT, 52, 11, 208, 24
+    EDITTEXT        IDC_PIN_EDIT, 52, 38, 208, 15, ES_PASSWORD | ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT           "", IDC_PIN_HINT, 52, 57, 208, 10
+    // Casilla para ver el PIN mientras se escribe (útil con los PIN largos
+    // del DNIe 4.0). AUTOCHECKBOX = se marca y desmarca sola al pulsarla;
+    // PinDialog.cpp solo tiene que reaccionar al cambio.
+    AUTOCHECKBOX    "&Mostrar el PIN", IDC_PIN_SHOW, 52, 71, 208, 11, WS_TABSTOP
+    // Franja gris de los botones desde y = 92 (FOOTER_TOP_DLU en PinDialog.cpp)
+    DEFPUSHBUTTON   "Aceptar", IDOK, 148, 101, 54, 15, WS_TABSTOP
+    PUSHBUTTON      "Cancelar", IDCANCEL, 206, 101, 54, 15, WS_TABSTOP
+END
+
+// ----------------------------------------------------------------------------
+//  2. Imagen del candado
+// ----------------------------------------------------------------------------
+//  Un archivo .ico contiene la misma imagen en varios tamaños (de 16 a 96
+//  píxeles) y Windows elige el más adecuado. Al ser el primer icono del
+//  .exe, es también el que muestra el Explorador de Windows para el archivo.
+//  La ruta lleva doble barra porque en un .rc la barra invertida es carácter
+//  de escape, igual que en C.
+IDI_PIN ICON "res\\seguro.ico"
+
+// ----------------------------------------------------------------------------
+//  3. Datos de versión
+// ----------------------------------------------------------------------------
+//  Son los que muestra el Explorador de Windows en las propiedades del .exe,
+//  pestaña "Detalles": quién lo ha desarrollado, qué es y qué versión es.
+//
+//    FILEVERSION / PRODUCTVERSION   la versión en números: 1.0.0.0.
+//    BLOCK "0C0A04B0"               el idioma de los textos: 0C0A = español
+//                                   de España; 04B0 = texto Unicode.
+//    "Translation"                  repite ese idioma, para que Windows sepa
+//                                   qué bloque leer.
+//
+//  Al publicar una versión nueva hay que cambiar el número en los cuatro
+//  sitios donde aparece.
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     1, 0, 0, 0
+PRODUCTVERSION  1, 0, 0, 0
+FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+FILEOS          VOS_NT_WINDOWS32
+FILETYPE        VFT_APP
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "0C0A04B0"
+        BEGIN
+            VALUE "CompanyName",      "FNMT-RCM"
+            VALUE "FileDescription",  "Firma con DNIe (anfitrión de Native Messaging)"
+            VALUE "FileVersion",      "1.0.0.0"
+            VALUE "InternalName",     "DNIeAnfitrion"
+            VALUE "LegalCopyright",   "Copyright (c) 2026 FNMT-RCM"
+            VALUE "OriginalFilename", "DNIeAnfitrion.exe"
+            VALUE "ProductName",      "Native Messaging para DNIe"
+            VALUE "ProductVersion",   "1.0.0.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0C0A, 1200
+    END
+END

@@ -1,0 +1,9 @@
+# Cada ejemplo tiene su propio .gitignore. Aquí, solo lo común a todo el repositorio.
+.vs/
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Firmas generadas al probar los ejemplos: llevan el certificado (nombre y DNI) de quien firma
+*.p7s
+*.sig

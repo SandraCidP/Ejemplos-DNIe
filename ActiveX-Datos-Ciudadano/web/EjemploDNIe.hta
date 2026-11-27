@@ -1,0 +1,89 @@
+﻿<!--
+  ================================================================================================
+   EjemploDNIe.hta - Abre EjemploDNIe.html como aplicación de escritorio (HTA)
+  ================================================================================================
+   Una HTA es una página que Windows ejecuta en su propia ventana con mshta.exe, usando el motor de
+   Internet Explorer. Es la forma más directa de probar hoy una página que usa ActiveX, sin
+   configurar el modo Internet Explorer de Edge.
+
+   Este fichero solo contiene un marco (iframe) que carga EjemploDNIe.html. El atributo
+   application="yes" da al contenido del marco los mismos permisos que la HTA (si no, se trataría
+   como una página web normal y se bloquearía el ActiveX).
+
+   Abrir con abrir.cmd, que usa el mshta.exe de la arquitectura del equipo (la misma que el
+   ActiveX registrado: x64 en Windows de 64 bits, ARM64 en equipos ARM).
+  ================================================================================================
+-->
+<html>
+<head>
+  <title>Ejemplo DNIe - ActiveX</title>
+  <HTA:APPLICATION ID="EjemploDNIe" APPLICATIONNAME="EjemploDNIe" SINGLEINSTANCE="yes" ICON="logoFNMT.ico" />
+  <!-- IE=edge: la página usa canvas y Uint8Array (foto y firma), que necesitan IE10 o superior.
+       El marco hereda este modo de documento. -->
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <script>
+    // Escala de Windows (125 %, 150 %, 200 %...). La HTA no la aplica sola: sin esto, en una
+    // pantalla con la escala alta la ventana y el texto se ven pequeños. Windows guarda la escala
+    // en el registro como puntos por pulgada: 96 es el 100 %, 120 el 125 %, 192 el 200 %...
+    function LeerEscala() {
+      var shell = new ActiveXObject("WScript.Shell");
+      var claves = ["HKCU\\Control Panel\\Desktop\\WindowMetrics\\AppliedDPI",
+                    "HKCU\\Control Panel\\Desktop\\LogPixels"];
+      for (var i = 0; i < claves.length; i++) {
+        try {
+          var ppp = shell.RegRead(claves[i]);
+          if (ppp > 96) return ppp / 96;
+          if (ppp == 96) return 1;
+        } catch (e) { }
+      }
+      return 1;
+    }
+    var ESCALA = 1;
+    try { ESCALA = LeerEscala(); } catch (e) { }
+
+    // Tamaño de la ventana ajustado al contenido y centrado en la pantalla
+    var ANCHO = Math.round(860 * ESCALA);
+    var ALTO = Math.min(Math.round(820 * ESCALA), screen.availHeight);
+    window.resizeTo(ANCHO, ALTO);
+    window.moveTo(Math.max(0, (screen.availWidth - ANCHO) / 2),
+                  Math.max(0, (screen.availHeight - ALTO) / 2));
+
+    // Amplía la página del marco con la misma escala. La página ampliada se colocaría como si
+    // tuviera el ancho de la ventana sin ampliar (y se saldría por la derecha), así que se le da
+    // el ancho de la ventana dividido por la escala, y se recalcula si cambia el tamaño.
+    function AplicarEscala(marco) {
+      if (ESCALA === 1) return;
+      try {
+        var w = marco.contentWindow, d = w.document, b = d.body;
+        var ajustar = function () {
+          var cs = b.currentStyle;
+          var extra = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) +
+                      parseFloat(cs.marginLeft) + parseFloat(cs.marginRight);
+          b.style.width = Math.max(0, Math.floor(d.documentElement.clientWidth / ESCALA - extra)) + "px";
+          // El aviso de operación en curso (position: fixed) no hereda la ampliación del body: se
+          // amplía aparte y, como al ampliarlo crecería también su tamaño, se le da el de la
+          // ventana dividido por la escala, para que siga cubriendo justo la ventana y centrado.
+          if (espera) {
+            espera.style.right = "auto";
+            espera.style.bottom = "auto";
+            espera.style.width = Math.floor(d.documentElement.clientWidth / ESCALA) + "px";
+            espera.style.height = Math.floor(d.documentElement.clientHeight / ESCALA) + "px";
+          }
+        };
+        var espera = d.getElementById("espera");
+        b.style.zoom = ESCALA;
+        if (espera) espera.style.zoom = ESCALA;
+        ajustar();
+        if (w.attachEvent) w.attachEvent("onresize", ajustar); else w.addEventListener("resize", ajustar);
+      } catch (e) { }
+    }
+  </script>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+    iframe { width: 100%; height: 100%; border: 0; }
+  </style>
+</head>
+<body>
+  <iframe src="EjemploDNIe.html" application="yes" onload="AplicarEscala(this)"></iframe>
+</body>
+</html>

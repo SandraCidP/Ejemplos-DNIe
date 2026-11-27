@@ -1,0 +1,119 @@
+<!--
+  ============================================================================
+   DNIeFirma.hta  -  Abre index.html como aplicación de escritorio
+  ============================================================================
+   QUÉ ES UNA HTA
+     Una "HTML Application" es una página web que Windows ejecuta en su propia
+     ventana con el programa mshta.exe, usando el motor de Internet Explorer.
+     Viene con Windows; no hay que instalar nada.
+
+   POR QUÉ SE USA AQUÍ
+     Internet Explorer ya no puede abrirse en Windows 11, y el "modo IE" de
+     Edge exige configuración. Una HTA es la forma más directa de ejecutar hoy
+     una página que usa ActiveX, y la página es exactamente la misma.
+
+   CÓMO FUNCIONA
+     Este archivo no contiene la página: solo un marco (iframe) que carga
+     index.html. El atributo application="yes" hace que el contenido del marco
+     tenga los mismos permisos que la HTA (sin él, se trataría como una página
+     web normal y se bloquearía el ActiveX).
+
+   CÓMO ABRIRLA
+     Con abrir.cmd (recomendado), que la lanza con el mshta.exe de 32 bits.
+     También con doble clic, salvo en equipos ARM64 (ver abrir.cmd).
+  ============================================================================
+-->
+<html>
+<head>
+    <title>Firma con DNIe 4.0</title>
+    <!-- Esta etiqueta configura la ventana de la aplicación:
+           ICON            icono de la ventana y de la barra de tareas.
+           SINGLEINSTANCE  no abrir una segunda ventana si ya hay una abierta;
+                           necesita APPLICATIONNAME para reconocerla. -->
+    <HTA:APPLICATION ID="DNIeFirma" APPLICATIONNAME="DNIeFirma" SINGLEINSTANCE="yes" ICON="logoFNMT.ico" />
+    <!-- Modo de documento IE9, y no "IE=edge" como en index.html, por una
+         rareza de las HTA: con IE=10 o superior, mshta ignora
+         el atributo ICON de la etiqueta anterior y la ventana sale con el
+         icono genérico. Sin esta línea, en cambio, la HTA usaría el modo IE7
+         y la página se vería mal. IE9 es el punto intermedio que funciona.
+         La página del marco hereda este modo; index.html no usa nada que
+         IE9 no entienda. -->
+    <meta http-equiv="X-UA-Compatible" content="IE=9">
+    <script>
+        // Tamaño y posición de la ventana. Por defecto una HTA se abre casi a
+        // pantalla completa, y el formulario quedaría perdido en una ventana
+        // enorme. La ajustamos al contenido y la centramos en la pantalla.
+        // Se hace aquí, en la cabecera, para que ocurra antes de pintar nada
+        // y no se vea el salto de tamaño.
+        //
+        // El alto deja sitio para los mensajes de resultado largos (los de
+        // error pueden ocupar varias líneas). Si aun así no cupiera, el marco
+        // muestra su barra de desplazamiento; y el usuario puede agrandar la
+        // ventana con el ratón.
+        //
+        // Escala de Windows (125 %, 150 %, 200 %...): la HTA no la aplica
+        // sola, y con la escala alta la ventana y el texto se verían
+        // pequeños. Windows la guarda en el registro en puntos por pulgada:
+        // 96 es el 100 %, 120 el 125 %, 192 el 200 %...
+        function leerEscala() {
+            var shell = new ActiveXObject("WScript.Shell");
+            var claves = ["HKCU\\Control Panel\\Desktop\\WindowMetrics\\AppliedDPI",
+                          "HKCU\\Control Panel\\Desktop\\LogPixels"];
+            for (var i = 0; i < claves.length; i++) {
+                try {
+                    var ppp = shell.RegRead(claves[i]);
+                    if (ppp > 96) { return ppp / 96; }
+                    if (ppp == 96) { return 1; }
+                } catch (e) { }
+            }
+            return 1;
+        }
+        var ESCALA = 1;
+        try { ESCALA = leerEscala(); } catch (e) { }
+
+        var ANCHO = Math.round(760 * ESCALA);
+        var ALTO = Math.min(Math.round(660 * ESCALA), screen.availHeight);
+        window.resizeTo(ANCHO, ALTO);
+        window.moveTo(Math.max(0, (screen.availWidth - ANCHO) / 2),
+                      Math.max(0, (screen.availHeight - ALTO) / 2));
+
+        // Amplía la página del marco con la misma escala. Ampliada, se
+        // colocaría como si tuviera el ancho de la ventana sin ampliar (y se
+        // saldría por la derecha), así que se le da ese ancho dividido por
+        // la escala, y se recalcula si cambia el tamaño de la ventana.
+        // El aviso de operación en curso (position: fixed) no hereda la
+        // ampliación: se amplía aparte, con el tamaño de la ventana también
+        // dividido por la escala, para que la cubra justo y salga centrado.
+        function aplicarEscala(marco) {
+            if (ESCALA === 1) { return; }
+            try {
+                var w = marco.contentWindow, d = w.document, b = d.body;
+                var espera = d.getElementById("espera");
+                var ajustar = function () {
+                    var cs = b.currentStyle;
+                    var extra = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) +
+                                parseFloat(cs.marginLeft) + parseFloat(cs.marginRight);
+                    b.style.width = Math.max(0, Math.floor(d.documentElement.clientWidth / ESCALA - extra)) + "px";
+                    if (espera) {
+                        espera.style.right = "auto";
+                        espera.style.bottom = "auto";
+                        espera.style.width = Math.floor(d.documentElement.clientWidth / ESCALA) + "px";
+                        espera.style.height = Math.floor(d.documentElement.clientHeight / ESCALA) + "px";
+                    }
+                };
+                b.style.zoom = ESCALA;
+                if (espera) { espera.style.zoom = ESCALA; }
+                ajustar();
+                if (w.attachEvent) { w.attachEvent("onresize", ajustar); } else { w.addEventListener("resize", ajustar); }
+            } catch (e) { }
+        }
+    </script>
+    <style>
+        html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+        iframe { width: 100%; height: 100%; border: 0; }
+    </style>
+</head>
+<body>
+    <iframe src="index.html" application="yes" onload="aplicarEscala(this)"></iframe>
+</body>
+</html>

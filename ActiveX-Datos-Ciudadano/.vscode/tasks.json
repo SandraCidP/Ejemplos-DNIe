@@ -1,0 +1,76 @@
+{
+    // ========================================================================
+    //  tasks.json - Tareas de Visual Studio Code para el ActiveX del DNIe.
+    //
+    //  VS Code no trae compilador. Estas tareas llaman a los mismos scripts
+    //  que se usan desde la consola (carpeta scripts\), que a su vez localizan
+    //  MSBuild. Por eso hacen falta Visual Studio 2022 o sus Build Tools, con
+    //  las herramientas de C++ y ATL, igual que sin VS Code.
+    //
+    //  Cómo usarlas:
+    //    Ctrl+Mayús+B                    ->  compila (la tarea por defecto)
+    //    Terminal > Ejecutar tarea...    ->  elegir cualquiera de las demás
+    //
+    //  Solo funcionan en Windows.
+    // ========================================================================
+    "version": "2.0.0",
+    "options": {
+        "cwd": "${workspaceFolder}"
+    },
+    "tasks": [
+        {
+            "label": "Compilar (Release, x86, x64 y ARM64)",
+            "detail": "scripts\\compilar.cmd: genera Win32\\Release, x64\\Release y ARM64\\Release",
+            "type": "process",
+            "command": "cmd.exe",
+            "args": ["/d", "/c", "scripts\\compilar.cmd"],
+            // "$msCompile" lleva los errores y avisos de MSBuild al panel
+            // "Problemas", con enlace a la línea del código.
+            "problemMatcher": "$msCompile",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "Compilar solo x64",
+            "detail": "scripts\\compilar.cmd x64",
+            "type": "process",
+            "command": "cmd.exe",
+            "args": ["/d", "/c", "scripts\\compilar.cmd", "x64"],
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Registrar el ActiveX",
+            "detail": "scripts\\registrar.cmd: registra las DLL para el usuario actual",
+            "type": "process",
+            "command": "cmd.exe",
+            "args": ["/d", "/c", "scripts\\registrar.cmd"],
+            "problemMatcher": []
+        },
+        {
+            "label": "Desregistrar el ActiveX",
+            "detail": "scripts\\desregistrar.cmd: deshace el registro",
+            "type": "process",
+            "command": "cmd.exe",
+            "args": ["/d", "/c", "scripts\\desregistrar.cmd"],
+            "problemMatcher": []
+        },
+        {
+            "label": "Abrir la página de ejemplo",
+            "detail": "web\\abrir.cmd: abre la HTA con el mshta nativo",
+            "type": "process",
+            "command": "cmd.exe",
+            "args": ["/d", "/c", "web\\abrir.cmd"],
+            "problemMatcher": []
+        },
+        {
+            "label": "Abrir la página de ejemplo (32 bits)",
+            "detail": "web\\abrir.cmd 32: prueba la DLL x86",
+            "type": "process",
+            "command": "cmd.exe",
+            "args": ["/d", "/c", "web\\abrir.cmd", "32"],
+            "problemMatcher": []
+        }
+    ]
+}

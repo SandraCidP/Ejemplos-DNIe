@@ -1,0 +1,18 @@
+{
+    "manifest_version": 3,
+    "name": "DNIe: datos y firma (ejemplo)",
+    "version": "1.0.0",
+    "description": "Permite a las páginas autorizadas leer los datos del DNI electrónico y firmar con él mediante un programa instalado en el equipo.",
+    "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1aHnuFOb/TMjKDCOgK80iBzBdWvpOsoq9jiSAWdx0l8z2PmmEF10SCpN5qXG/Ze26Zwj2dIWTEHmlV+L/Ia0bmeqE7wjfT2IKjsZkNC445WW8TA1i+BF4Bu4bMgZC8taQ84Ta7E7HXl7Rv37YCLXZT6Hd6vlwI21esKtdD59SoGPZK4bpCgrcxQugbFQWVgsHVAYv4mkJv6edNqYjhm4/FBNzCcEmR/uNtYWimHPwlLSD1Dut7IoB/eJoTLGBSWXC3EKxfWJu9c7SdylM4cSrYId/LBQlob5cE5bjbi9yBJknMQGjnZpqgK38U3zkuOrozQExNPCfdHQFd4eH6P3/wIDAQAB",
+    "permissions": ["nativeMessaging"],
+    "background": {
+        "service_worker": "fondo.js"
+    },
+    "content_scripts": [
+        {
+            "matches": ["http://localhost/*"],
+            "js": ["contenido.js"],
+            "run_at": "document_start"
+        }
+    ]
+}

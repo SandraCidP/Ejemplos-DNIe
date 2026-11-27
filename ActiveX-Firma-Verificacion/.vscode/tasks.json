@@ -1,0 +1,76 @@
+{
+    // ========================================================================
+    //  tasks.json - Tareas de Visual Studio Code para este proyecto.
+    //
+    //  VS Code no trae compilador. Estas tareas se limitan a llamar a los
+    //  mismos scripts que se usan desde la consola (carpeta scripts\), que a
+    //  su vez localizan MSBuild. Por eso hacen falta Visual Studio 2022 o sus
+    //  Build Tools, igual que sin VS Code.
+    //
+    //  Cómo usarlas:
+    //    Ctrl+Mayús+B                    ->  compila (la tarea por defecto)
+    //    Terminal > Ejecutar tarea...    ->  elegir cualquiera de las demás
+    //
+    //  Todas son de tipo "process" y llaman a cmd.exe con una ruta relativa
+    //  (scripts\...). Así no importa que la carpeta del proyecto tenga
+    //  espacios o acentos, ni cuál sea la consola por defecto de VS Code.
+    //
+    //  Solo funcionan en Windows.
+    // ========================================================================
+    "version": "2.0.0",
+    "options": {
+        "cwd": "${workspaceFolder}"
+    },
+    "tasks": [
+        {
+            "label": "Compilar (Release, x86 y x64)",
+            "detail": "scripts\\compilar.cmd: genera bin\\Win32\\Release y bin\\x64\\Release",
+            "type": "process",
+            "command": "cmd.exe",
+            "args": ["/d", "/c", "scripts\\compilar.cmd"],
+            // "$msCompile" lee los errores y avisos de MSBuild y los lleva al
+            // panel "Problemas", con enlace a la línea del código.
+            "problemMatcher": "$msCompile",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "Registrar el control",
+            "detail": "scripts\\registrar.cmd: registra las DLL para el usuario actual",
+            "type": "process",
+            "command": "cmd.exe",
+            "args": ["/d", "/c", "scripts\\registrar.cmd"],
+            "problemMatcher": []
+        },
+        {
+            "label": "Desregistrar el control",
+            "detail": "scripts\\desregistrar.cmd: deshace el registro",
+            "type": "process",
+            "command": "cmd.exe",
+            "args": ["/d", "/c", "scripts\\desregistrar.cmd"],
+            "problemMatcher": []
+        },
+        {
+            "label": "Ejecutar las pruebas",
+            "detail": "tests\\ejecutar-pruebas.ps1: no necesitan DNIe",
+            "type": "process",
+            "command": "powershell.exe",
+            "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "tests\\ejecutar-pruebas.ps1"],
+            "problemMatcher": [],
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "Abrir la página de ejemplo",
+            "detail": "web\\abrir.cmd: abre la HTA con el motor de 32 bits",
+            "type": "process",
+            "command": "cmd.exe",
+            "args": ["/d", "/c", "web\\abrir.cmd"],
+            "problemMatcher": []
+        }
+    ]
+}

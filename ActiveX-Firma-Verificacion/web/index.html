@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<!--
+  ============================================================================
+   index.html  -  Página de ejemplo: firmar y verificar con el DNIe
+  ============================================================================
+   Esta página usa el control ActiveX "DNIeActiveX.Signer". Todo lo que hace
+   la página con el control está en el <script> del final, muy comentado.
+
+   DÓNDE FUNCIONA
+     Desde una PÁGINA WEB, un ActiveX solo puede usarse con el motor de
+     Internet Explorer (fuera de una página lo puede usar cualquier programa
+     que hable COM: Windows Script Host, como en tests\prueba.js; VBA...):
+       - Internet Explorer 11.
+       - Microsoft Edge en "modo Internet Explorer".
+       - Una aplicación HTA (ver DNIeFirma.hta / abrir.cmd en esta carpeta),
+         que es la forma más cómoda de probarla hoy.
+     En Chrome, Firefox o Edge normal NO funciona: no existe "ActiveXObject".
+
+   REQUISITO
+     El control debe estar registrado en el equipo (scripts\registrar.cmd).
+
+   NOTA SOBRE EL CÓDIGO
+     El JavaScript y los estilos están escritos "a la antigua" (var, function,
+     sin flechas ni const/let; maquetación con float en vez de flexbox) a
+     propósito: es lo que entiende Internet Explorer a partir de su versión 9,
+     que es el modo en que se muestra la página dentro de la HTA.
+  ============================================================================
+-->
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <!-- Pide a Internet Explorer su modo más moderno (IE11) en vez de un modo
+         de compatibilidad antiguo, que es el que usaría por defecto con una
+         página local o de la intranet. (Dentro de la HTA esta línea no tiene
+         efecto: allí manda el modo que fija DNIeFirma.hta.) -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Firma con DNIe 4.0</title>
+    <!-- Icono de la página (el que aparece en la pestaña del navegador). -->
+    <link rel="icon" href="logoFNMT.ico">
+    <link rel="shortcut icon" href="logoFNMT.ico">
+    <style>
+        body {
+            font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+            font-size: 15px;
+            color: #1f2933;
+            background: #f3f5f7;
+            margin: 0;
+            padding: 24px 16px;
+        }
+        .panel {
+            max-width: 640px;
+            margin: 0 auto;
+            background: #ffffff;
+            border: 1px solid #d5dbe1;
+            border-radius: 6px;
+            padding: 24px 28px 28px 28px;
+        }
+        .cabecera { overflow: hidden; margin-bottom: 24px; }
+        .cabecera img { float: left; width: 48px; height: 48px; margin-right: 14px; }
+        .cabecera .titulos { overflow: hidden; }
+        h1 { font-size: 22px; font-weight: 600; margin: 2px 0 4px 0; }
+        .subtitulo { color: #5b6773; margin: 0; }
+        label { display: block; font-weight: 600; margin: 16px 0 6px 0; }
+        .fila { overflow: hidden; }                 /* contiene al botón flotante */
+        .fila button { float: right; margin-left: 8px; }
+        .fila .caja { overflow: hidden; }           /* ocupa el ancho restante */
+        input[type=text] {
+            width: 100%;
+            box-sizing: border-box;
+            font: inherit;
+            padding: 7px 9px;
+            border: 1px solid #aab4be;
+            border-radius: 4px;
+        }
+        .ayuda { color: #5b6773; font-size: 13px; margin: 5px 0 0 0; }
+        button {
+            font: inherit;
+            padding: 7px 14px;
+            border: 1px solid #aab4be;
+            border-radius: 4px;
+            background: #ffffff;
+            color: #1f2933;
+            cursor: pointer;
+        }
+        button:hover { background: #eef1f4; }
+        button.principal { background: #1d5fa8; border-color: #1d5fa8; color: #ffffff; }
+        button.principal:hover { background: #174d89; }
+        .acciones { margin-top: 24px; }
+        .acciones button { margin-right: 8px; min-width: 120px; }
+        #resultado {
+            margin-top: 24px;
+            padding: 12px 14px;
+            border-radius: 4px;
+            border: 1px solid #d5dbe1;
+            background: #f3f5f7;
+            word-wrap: break-word;
+        }
+        #resultado.correcto { background: #e6f4ea; border-color: #8fc7a0; color: #14532d; }
+        #resultado.error    { background: #fdecea; border-color: #e6a19a; color: #7f1d1d; }
+        #resultado strong { display: block; margin-bottom: 2px; }
+        .pie { margin-top: 24px; text-align: center; }
+        .pie button { min-width: 120px; }
+
+        /* Aviso de operación en curso: cubre la página y bloquea los clics
+           mientras el control trabaja con la tarjeta (ver el punto 4). */
+        #espera { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 100;
+                  background: rgba(243, 245, 247, 0.75); cursor: wait; }
+        #espera .caja-espera { position: absolute; top: 40%; left: 50%; width: 340px; margin-left: -186px;
+                               padding: 18px 16px; background: #fff; border: 1px solid #d5dbe1; border-radius: 6px;
+                               text-align: center; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12); }
+        #espera .reloj { font-size: 28px; line-height: 32px; color: #1d5fa8; }
+        #espera strong { display: block; margin: 6px 0 4px 0; }
+        #espera .ayuda { margin: 0; }
+    </style>
+</head>
+<body>
+    <div class="panel">
+        <div class="cabecera">
+            <img src="logoFNMT.png" alt="">
+            <div class="titulos">
+                <h1 id="titulo">Firma electrónica con DNIe 4.0</h1>
+                <p class="subtitulo">Firme un archivo con su DNI electrónico o compruebe una firma.</p>
+            </div>
+        </div>
+
+        <label for="archivo">Archivo</label>
+        <div class="fila">
+            <button type="button" onclick="seleccionarArchivo()">Seleccionar…</button>
+            <div class="caja"><input type="text" id="archivo" onchange="proponerFirma()"></div>
+        </div>
+
+        <label for="firma">Archivo de firma (.p7s)</label>
+        <div class="fila">
+            <button type="button" onclick="seleccionarFirma()">Seleccionar…</button>
+            <div class="caja"><input type="text" id="firma"></div>
+        </div>
+        <p class="ayuda">Al firmar, la firma se guarda en este archivo. Al verificar, se lee de él.</p>
+
+        <div class="acciones">
+            <button type="button" class="principal" onclick="firmar()">Firmar</button>
+            <button type="button" onclick="verificar()">Verificar firma</button>
+            <button type="button" onclick="limpiar()">Limpiar</button>
+        </div>
+
+        <div id="resultado">Seleccione un archivo para empezar.</div>
+
+        <div class="pie">
+            <button type="button" onclick="salir()">Salir</button>
+        </div>
+    </div>
+
+    <!-- Aviso de operación en curso -->
+    <div id="espera">
+        <div class="caja-espera">
+            <div class="reloj">&#8987;</div>
+            <strong id="textoEspera">Operación en curso…</strong>
+            <p class="ayuda" id="ayudaEspera">Espere, por favor. No retire el DNIe del lector.</p>
+        </div>
+    </div>
+
+    <script>
+        // ====================================================================
+        //  1. Crear el control
+        // ====================================================================
+        //  "DNIeActiveX.Signer" es el ProgID con el que la DLL se registró en
+        //  Windows. new ActiveXObject(...) hace que Windows localice la DLL,
+        //  la cargue dentro del navegador y cree el objeto.
+        //
+        //  Lo creamos una sola vez, la primera que hace falta (al cargar la
+        //  página; ver el punto 6), y lo guardamos.
+        var firmador = null;
+
+        // true mientras el control está firmando (ver los puntos 4 y 6).
+        var controlOcupado = false;
+
+        function obtenerFirmador() {
+            if (firmador !== null) {
+                return firmador;
+            }
+            try {
+                firmador = new ActiveXObject("DNIeActiveX.Signer");
+            } catch (e) {
+                // Causas posibles:
+                //  - el navegador no soporta ActiveX (Chrome, Firefox, Edge);
+                //  - el control no está registrado en este equipo, o lo está
+                //    solo para la otra arquitectura (32 / 64 bits);
+                //  - el programa se ejecuta "como administrador" y el control
+                //    se registró solo para el usuario (ver DllMain.cpp);
+                //  - la configuración de seguridad de Internet Explorer
+                //    bloquea los ActiveX en esta zona.
+                mostrar("error", "No se puede usar el control de firma",
+                    "Esta página necesita Internet Explorer (o Edge en modo Internet Explorer, " +
+                    "o abrirse con abrir.cmd) y que el control DNIeActiveX esté registrado " +
+                    "en el equipo (scripts\\registrar.cmd).");
+                return null;
+            }
+            return firmador;
+        }
+
+        // ====================================================================
+        //  2. Utilidades de la página (nada específico del control)
+        // ====================================================================
+
+        // Muestra un mensaje en el recuadro de resultado.
+        //   tipo: "correcto", "error" o "" (neutro).
+        function mostrar(tipo, titulo, detalle) {
+            var recuadro = document.getElementById("resultado");
+            recuadro.className = tipo;
+            recuadro.innerHTML = "";
+
+            var negrita = document.createElement("strong");
+            negrita.appendChild(document.createTextNode(titulo));
+            recuadro.appendChild(negrita);
+
+            // createTextNode (y no innerHTML) para que una ruta o un nombre
+            // con caracteres como < o & se muestre tal cual.
+            if (detalle) {
+                recuadro.appendChild(document.createTextNode(detalle));
+            }
+        }
+
+        // Deja la página como recién abierta: sin rutas y sin el resultado de
+        // la última operación (que incluye el nombre del firmante). Se llama
+        // desde el botón «Limpiar» y, sola, al retirar el DNIe (punto 6).
+        function limpiar() {
+            document.getElementById("archivo").value = "";
+            document.getElementById("firma").value = "";
+
+            var recuadro = document.getElementById("resultado");
+            recuadro.className = "";
+            recuadro.innerHTML = "";
+            recuadro.appendChild(document.createTextNode("Seleccione un archivo para empezar."));
+        }
+
+        function valorDe(id) {
+            // Quitamos espacios al principio y al final.
+            return document.getElementById(id).value.replace(/^\s+|\s+$/g, "");
+        }
+
+        // Aviso de operación en curso. Con el DNIe 4.0, antes de pedir el PIN
+        // el control abre un canal seguro con la tarjeta, que tarda unos
+        // segundos; sin aviso, la página parecería bloqueada. El aviso cubre
+        // la página, así que mientras está no se puede pulsar nada más.
+        function mostrarEspera(titulo, ayuda) {
+            controlOcupado = true;
+            document.getElementById("textoEspera").innerHTML = titulo;
+            document.getElementById("ayudaEspera").innerHTML = ayuda;
+            document.getElementById("espera").style.display = "block";
+        }
+
+        // Se espera un poco antes de quitar el aviso para descartar los clics
+        // que el usuario hizo mientras la página estaba ocupada.
+        function quitarEspera() {
+            setTimeout(function () {
+                document.getElementById("espera").style.display = "none";
+                controlOcupado = false;
+            }, 300);
+        }
+
+        // Al elegir el archivo, proponemos como firma "<archivo>.p7s".
+        function proponerFirma() {
+            var archivo = valorDe("archivo");
+            document.getElementById("firma").value = archivo ? archivo + ".p7s" : "";
+        }
+
+        // ====================================================================
+        //  3. Elegir archivos
+        // ====================================================================
+        //  ¿Por qué no un <input type="file">? Porque el navegador, por
+        //  seguridad, no entrega a JavaScript la ruta real del archivo, y el
+        //  control necesita la ruta para leerlo del disco. Por eso el propio
+        //  control ofrece SelectFile, que abre el diálogo "Abrir" de Windows y
+        //  devuelve la ruta completa ("" si el usuario cancela).
+        function seleccionarArchivo() {
+            var control = obtenerFirmador();
+            if (!control) { return; }
+
+            var ruta = control.SelectFile("Seleccione el archivo");
+            if (ruta) {
+                document.getElementById("archivo").value = ruta;
+                proponerFirma();
+                mostrar("", "Archivo seleccionado.", "Pulse «Firmar» o «Verificar firma».");
+            }
+        }
+
+        function seleccionarFirma() {
+            var control = obtenerFirmador();
+            if (!control) { return; }
+
+            var ruta = control.SelectFile("Seleccione el archivo de firma (.p7s)");
+            if (ruta) {
+                document.getElementById("firma").value = ruta;
+            }
+        }
+
+        // ====================================================================
+        //  4. Firmar
+        // ====================================================================
+        //  SignFile(archivo, firma) devuelve true o false. No lanza
+        //  excepciones por errores "normales" (PIN incorrecto, sin tarjeta...):
+        //  el motivo se lee en la propiedad LastError.
+        //
+        //  Durante la llamada, el control muestra su diálogo para pedir el PIN
+        //  del DNIe. La llamada no vuelve hasta que la firma termina o falla.
+        function firmar() {
+            var control = obtenerFirmador();
+            if (!control) { return; }
+
+            var archivo = valorDe("archivo");
+            var firma = valorDe("firma");
+            if (!archivo) {
+                mostrar("error", "Falta el archivo.", "Seleccione primero el archivo que quiere firmar.");
+                return;
+            }
+
+            if (controlOcupado) { return; }
+            mostrar("", "Firmando…", "Introduzca el PIN de su DNIe cuando se le pida.");
+            mostrarEspera("Firmando…", "Introduzca el PIN cuando se le pida. No retire el DNIe del lector.");
+
+            // setTimeout da tiempo al navegador a pintar el mensaje anterior
+            // antes de que la llamada al control deje la página "ocupada".
+            setTimeout(function () {
+                // Mientras dura la firma no consultamos la versión del DNIe
+                // (ver el punto 6): el diálogo del PIN deja que la página
+                // siga atendiendo sus temporizadores. controlOcupado ya lo
+                // ha puesto mostrarEspera.
+                var firmado = control.SignFile(archivo, firma);
+                // Anotamos qué tarjeta hay al terminar. Así, si el DNIe se
+                // retiró durante la firma, la limpieza automática del punto 6
+                // no borra el resultado (o el error) que mostramos ahora.
+                tarjetaVista = control.DnieVersion;
+                quitarEspera();
+
+                if (firmado) {
+                    mostrar("correcto", "Archivo firmado correctamente.",
+                        "Firmante: " + control.SignerName + ". Firma guardada en: " + (firma || archivo + ".p7s"));
+                } else {
+                    mostrar("error", "No se ha podido firmar.", control.LastError);
+                }
+            }, 50);
+        }
+
+        // ====================================================================
+        //  5. Verificar
+        // ====================================================================
+        //  VerifyFile(archivo, firma) devuelve true si la firma corresponde al
+        //  archivo y el certificado del firmante es de confianza. Si devuelve
+        //  false, LastError explica cuál de las dos cosas ha fallado.
+        //  (La confianza se exige porque la propiedad CheckCertificateTrust
+        //  del control vale true por defecto; con false solo se comprobaría
+        //  que la firma corresponde al archivo.)
+        function verificar() {
+            var control = obtenerFirmador();
+            if (!control) { return; }
+
+            var archivo = valorDe("archivo");
+            var firma = valorDe("firma");
+            if (!archivo) {
+                mostrar("error", "Falta el archivo.", "Seleccione primero el archivo cuya firma quiere comprobar.");
+                return;
+            }
+
+            if (controlOcupado) { return; }
+            mostrar("", "Verificando…", "");
+            mostrarEspera("Verificando…", "Espere, por favor.");
+
+            setTimeout(function () {
+                if (control.VerifyFile(archivo, firma)) {
+                    mostrar("correcto", "La firma es válida.", "Firmado por: " + control.SignerName);
+                } else {
+                    mostrar("error", "La verificación ha fallado.", control.LastError);
+                }
+                quitarEspera();
+            }, 50);
+        }
+
+        // ====================================================================
+        //  6. Adaptar los textos a la versión del DNIe
+        // ====================================================================
+        //  La propiedad DnieVersion del control dice qué DNIe hay ahora mismo
+        //  en el lector: "3.0", "4.0" o "" (ninguno, o una versión que el
+        //  control no reconoce). Leerla no pide el PIN.
+        //
+        //  Con ella ponemos la versión en el título de la página. Mientras no
+        //  se detecte ninguna tarjeta, se muestra la versión por defecto.
+        //
+        //  La misma consulta sirve para saber cuándo se retira el DNIe: si
+        //  antes había uno y ahora no (o hay uno de otra versión), limpiamos
+        //  la página, para que los datos de la operación de una persona no
+        //  queden a la vista de la siguiente.
+        //  (Límite: si se cambia un DNIe por otro de la misma versión en menos
+        //  de lo que tarda la siguiente consulta, no se nota el cambio.)
+        var VERSION_POR_DEFECTO = "4.0";
+        var versionMostrada = VERSION_POR_DEFECTO;   // La que dice ahora la página.
+        var tarjetaVista = "";                       // DnieVersion en la última consulta.
+
+        function actualizarVersion() {
+            // Usamos el control solo si ya está creado (así, si no se puede
+            // crear, el aviso de error sale una vez y no en cada consulta) y
+            // si no está en plena firma.
+            if (firmador === null || controlOcupado) { return; }
+
+            var tarjeta = firmador.DnieVersion;
+            if (tarjetaVista && tarjeta !== tarjetaVista) {
+                limpiar();   // Se ha retirado (o cambiado) el DNIe.
+            }
+            tarjetaVista = tarjeta;
+
+            var version = tarjeta || VERSION_POR_DEFECTO;
+            if (version === versionMostrada) { return; }   // Nada que cambiar.
+            versionMostrada = version;
+
+            document.getElementById("titulo").innerHTML = "Firma electrónica con DNIe " + version;
+            document.title = "Firma con DNIe " + version;
+            // Dentro de la HTA, el título de la ventana es el de la página
+            // de fuera (window.top), no el de este marco.
+            try { window.top.document.title = document.title; } catch (e) { }
+        }
+
+        // Al cargar la página creamos el control y miramos qué tarjeta hay.
+        // Después volvemos a mirar cada dos segundos, para que el título
+        // cambie solo cuando el usuario inserta o cambia el DNIe, y para
+        // limpiar la página cuando lo retira.
+        // (El setTimeout deja que la página se pinte antes de crear el
+        // control; si no se puede crear, obtenerFirmador muestra el motivo.)
+        setTimeout(function () {
+            if (obtenerFirmador()) {
+                actualizarVersion();
+                setInterval(actualizarVersion, 2000);
+            }
+        }, 50);
+
+        // ====================================================================
+        //  7. Salir
+        // ====================================================================
+        //  Cierra la ventana. Dentro de la HTA esta página está en un marco
+        //  (iframe), y lo que hay que cerrar es la ventana de fuera: window.top.
+        //  En la HTA se cierra sin más. En Internet Explorer (o Edge en modo
+        //  IE), el navegador pregunta antes al usuario si quiere cerrar la
+        //  pestaña, porque no la abrió un script; eso no se puede evitar.
+        function salir() {
+            window.top.close();
+        }
+    </script>
+</body>
+</html>

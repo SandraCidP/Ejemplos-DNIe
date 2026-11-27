@@ -1,0 +1,9 @@
+{
+    "name": "es.fnmt.dniefirma",
+    "description": "Firma de archivos con el DNI electrónico (ejemplo)",
+    "path": "DNIeAnfitrion.exe",
+    "type": "stdio",
+    "allowed_origins": [
+        "chrome-extension://amdchagegphbcmlidmjblabggpclhggj/"
+    ]
+}

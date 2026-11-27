@@ -1,0 +1,7 @@
+{
+    // Extensiones que VS Code propone instalar al abrir esta carpeta.
+    // "C/C++" de Microsoft: IntelliSense y depurador para el código del programa.
+    "recommendations": [
+        "ms-vscode.cpptools"
+    ]
+}

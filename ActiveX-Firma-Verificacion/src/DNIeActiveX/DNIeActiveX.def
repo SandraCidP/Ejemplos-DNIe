@@ -1,0 +1,27 @@
+; ============================================================================
+;  DNIeActiveX.def  -  Funciones que la DLL exporta
+; ============================================================================
+;  Una DLL con un componente COM exporta estas funciones con estos nombres
+;  exactos, porque Windows (y regsvr32) las busca por nombre. Las dos
+;  primeras las exige COM; las dos siguientes, regsvr32; DllInstall es
+;  opcional y aqui se usa para ofrecer el registro por usuario.
+;
+;    DllGetClassObject    Windows la llama para pedir la "fabrica" que crea
+;                         los objetos (cuando alguien hace new ActiveXObject).
+;    DllCanUnloadNow      Windows pregunta si ya puede descargar la DLL.
+;    DllRegisterServer    regsvr32 DNIeActiveX.dll       (para todo el equipo)
+;    DllUnregisterServer  regsvr32 /u DNIeActiveX.dll
+;    DllInstall           regsvr32 /n /i:user DNIeActiveX.dll  (solo para el
+;                         usuario actual; no necesita ser administrador)
+;
+;  PRIVATE = se exporta pero no se incluye en la biblioteca de importacion.
+;  Todas estan implementadas en DllMain.cpp.
+; ============================================================================
+LIBRARY "DNIeActiveX"
+
+EXPORTS
+    DllGetClassObject    PRIVATE
+    DllCanUnloadNow      PRIVATE
+    DllRegisterServer    PRIVATE
+    DllUnregisterServer  PRIVATE
+    DllInstall           PRIVATE

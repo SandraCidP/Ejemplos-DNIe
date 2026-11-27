@@ -1,0 +1,9 @@
+{
+    "name": "es.fnmt.dniedatos",
+    "description": "Lectura de datos y firma con el DNI electrónico (ejemplo)",
+    "path": "DNIeDatos.exe",
+    "type": "stdio",
+    "allowed_extensions": [
+        "dniedatos@fnmt.es"
+    ]
+}

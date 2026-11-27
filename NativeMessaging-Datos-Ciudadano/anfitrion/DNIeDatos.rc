@@ -1,0 +1,63 @@
+// DNIeDatos.rc (UTF-8)
+//
+// Recursos del anfitrión: versión del programa, icono y diálogo del PIN.
+#pragma code_page(65001)
+#include "resource.h"
+#include "winres.h"
+
+LANGUAGE LANG_SPANISH, SUBLANG_SPANISH_MODERN
+
+// Información de versión: la que se ve en Propiedades > Detalles del .exe. La operación
+// "informacion" la devuelve a la página.
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 1,0,0,0
+ PRODUCTVERSION 1,0,0,0
+ FILEFLAGSMASK 0x3fL
+ FILEFLAGS 0x0L
+ FILEOS 0x40004L
+ FILETYPE 0x1L
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "0c0a04b0"
+        BEGIN
+            VALUE "Comments", "Anfitrión de Native Messaging para leer los datos del DNIe y firmar con él (DNIe 3.0 y DNIe 4.0)."
+            VALUE "CompanyName", "FNMT-RCM"
+            VALUE "FileDescription", "DNIe - Native Messaging"
+            VALUE "FileVersion", "1.0.0.0"
+            VALUE "InternalName", "DNIeDatos"
+            VALUE "LegalCopyright", "Copyright (C) 2026 FNMT-RCM"
+            VALUE "OriginalFilename", "DNIeDatos.exe"
+            VALUE "ProductName", "DNIe - Native Messaging"
+            VALUE "ProductVersion", "1.0.0.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0xc0a, 1200
+    END
+END
+
+// El primer icono de un .exe es el que muestra el Explorador.
+IDI_PROGRAMA ICON "res\\candado.ico"
+IDI_PIN      ICON "res\\candado.ico"
+
+// Diálogo del PIN (PinDialog.cpp). El mismo que el del ActiveX, con una línea más abajo
+// (IDC_PIN_ORIGEN) que dice qué página lo solicita.
+IDD_PIN DIALOGEX 0, 0, 270, 134
+STYLE DS_MODALFRAME | DS_CENTER | DS_SETFOREGROUND | DS_SHELLFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
+EXSTYLE WS_EX_TOPMOST
+CAPTION "DNI electrónico - PIN"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    CONTROL "", IDC_PIN_ICON, "Static", SS_ICON, 12, 12, 0, 0
+    LTEXT "Introduzca el PIN de su DNIe para firmar", IDC_PIN_TEXT, 52, 11, 208, 24
+    EDITTEXT IDC_PIN_EDIT, 52, 38, 208, 15, ES_PASSWORD | ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT "", IDC_PIN_HINT, 52, 57, 208, 10
+    AUTOCHECKBOX "&Mostrar el PIN", IDC_PIN_SHOW, 52, 71, 208, 11, WS_TABSTOP
+    LTEXT "", IDC_PIN_ORIGEN, 52, 85, 208, 10, SS_ENDELLIPSIS | SS_NOPREFIX
+    // Franja de los botones desde y = 100 (FOOTER_TOP_DLU en PinDialog.cpp)
+    DEFPUSHBUTTON "Aceptar", IDOK, 148, 109, 54, 15, WS_TABSTOP
+    PUSHBUTTON "Cancelar", IDCANCEL, 206, 109, 54, 15, WS_TABSTOP
+END

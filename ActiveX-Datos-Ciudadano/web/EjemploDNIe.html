@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<title>Ejemplo DNIe - ActiveX</title>
+<link rel="icon" href="logoFNMT.ico">
+<link rel="shortcut icon" href="logoFNMT.ico">
+<!--
+  ================================================================================================
+   Ejemplo de uso del DNIe con ActiveX (FNMT-RCM), versión 1.0
+  ================================================================================================
+   Para el DNIe 4.0 (curva elíptica) y el DNIe 3.0 (RSA). Con el DNIe 3.0, los datos personales, la
+   MRZ y las imágenes solo se pueden leer con el PIN, y el ActiveX lo pide cuando hace falta. El
+   ActiveX publicado (ActiveXDNIe 1.0.0.2, ProgID DLL_ADMINISTRATIVA_DNIE.DLL_ADMIN) puede seguir
+   instalado a la vez que este. Muestra las funciones
+   habituales: conexión, información del chip, datos personales, MRZ, foto y firma manuscrita,
+   certificados, claves públicas, PIN, firma y verificación, y firma de un archivo (la página calcula
+   su SHA-256 y el ActiveX firma ese resumen, dado en hashIn).
+
+   DÓNDE FUNCIONA
+     Un control ActiveX solo puede usarse desde una página con el motor de Internet Explorer:
+       - Como aplicación HTA: abrir.cmd (o EjemploDNIe.hta), que carga esta página.
+       - Microsoft Edge en "modo Internet Explorer".
+     En Chrome, Firefox o Edge normal no existe ActiveXObject.
+
+   REQUISITOS
+     - Driver del DNIe (DNIe_P11) 2.0.0.13 o posterior.
+     - ActiveXDNIe registrado (regsvr32) con la misma arquitectura que el navegador o mshta.
+     - openjpeg.js en esta misma carpeta para ver la foto y la firma manuscrita (JPEG 2000).
+
+   CONVENCIONES DEL ACTIVEX
+     - Cada método deja el resultado en lastresultOut: 0 = correcto; otro valor = código de error
+       PKCS#11 (ver Explicacion()).
+     - Los datos binarios (certificados, claves, firmas, imágenes) se devuelven como texto con un
+       carácter por byte; aquí se pasan a hexadecimal con aHex() o a bytes con aBytes().
+     - La firma se hace sobre el SHA-256 de los datos (o sobre el resumen SHA-256 dado en hashIn).
+     - El PIN lo pide el propio ActiveX, con una ventana suya, cuando una operación lo necesita
+       (firmar, consultar las claves privadas, leer datos personales del DNIe 3.0). La página nunca
+       ve el PIN. PinIn/PresentarPin se mantienen por compatibilidad con el ActiveX publicado.
+     - Antes de entregar los datos personales, la MRZ o las imágenes, el ActiveX pide permiso al
+       usuario (una vez por conexión). Si lo deniega: lastresultOut = 0x200 (CKR_FUNCTION_REJECTED).
+       Si cancela el PIN: lastresultOut = 0x50 (CKR_FUNCTION_CANCELED).
+     - DNIe 4.0: si el ActiveX tiene que reiniciar la tarjeta para leer los datos, el PIN presentado
+       se pierde (se volverá a pedir al firmar).
+     - Las llamadas al ActiveX son síncronas: mientras la tarjeta trabaja, la página no responde.
+       Por eso cada operación se lanza con Ejecutar(), que primero muestra el aviso "Operación en
+       curso", deja que se pinte y después llama al ActiveX; mientras tanto ignora otros clics.
+
+   NOTA SOBRE EL CÓDIGO
+     JavaScript y estilos compatibles con el modo Internet Explorer: var y function (sin let, const
+     ni funciones flecha) y maquetación sin flexbox ni grid.
+  ================================================================================================
+-->
+<style>
+  body {
+    font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+    font-size: 15px;
+    color: #1f2933;
+    background: #f3f5f7;
+    margin: 0;
+    padding: 24px 16px;
+  }
+  .panel {
+    max-width: 720px;
+    margin: 0 auto;
+    background: #ffffff;
+    border: 1px solid #d5dbe1;
+    border-radius: 6px;
+    padding: 24px 28px 28px 28px;
+  }
+
+  /* Cabecera */
+  .cabecera { overflow: hidden; margin-bottom: 20px; }
+  .cabecera img { float: left; width: 48px; height: 48px; margin-right: 14px; }
+  .cabecera .titulos { overflow: hidden; }
+  h1 { font-size: 22px; font-weight: 600; margin: 2px 0 4px 0; }
+  .subtitulo { color: #5b6773; margin: 0; }
+
+  /* Conexión */
+  .conexion { overflow: hidden; padding: 12px 14px; border: 1px solid #d5dbe1; border-radius: 4px;
+              background: #f8fafb; }
+  .conexion .botones { float: right; }
+  .conexion .botones button { margin-left: 8px; }
+  .indicador { display: inline-block; width: 10px; height: 10px; border-radius: 5px; margin-right: 8px;
+               background: #aab4be; }
+  .conectado .indicador { background: #2e9e55; }
+  #textoConexion { font-weight: 600; line-height: 34px; }
+
+  /* Pestañas */
+  .pestanas { margin: 22px 0 0 0; padding: 0; border-bottom: 1px solid #d5dbe1; overflow: hidden; }
+  .pestanas li { float: left; list-style: none; margin: 0 2px -1px 0; }
+  .pestanas a { display: block; padding: 8px 12px; color: #5b6773; text-decoration: none;
+                border: 1px solid transparent; border-radius: 4px 4px 0 0; cursor: pointer; }
+  .pestanas a:hover { color: #1d5fa8; }
+  .pestanas a.activa { color: #1f2933; font-weight: 600; background: #fff; border-color: #d5dbe1;
+                       border-bottom-color: #fff; }
+  .seccion { display: none; padding-top: 6px; }
+  .seccion.activa { display: block; }
+  h2 { font-size: 16px; font-weight: 600; margin: 18px 0 2px 0; }
+
+  /* Formularios */
+  label { display: block; font-weight: 600; margin: 16px 0 6px 0; }
+  input[type=text], input[type=password], select, textarea {
+    width: 100%;
+    box-sizing: border-box;
+    font: inherit;
+    padding: 7px 9px;
+    border: 1px solid #aab4be;
+    border-radius: 4px;
+    background: #fff;
+  }
+  input[readonly], textarea[readonly] { background: #f8fafb; }
+  textarea { height: 76px; font-family: Consolas, "Courier New", monospace; font-size: 12px; }
+  input[type=file] { width: 100%; box-sizing: border-box; font: inherit; }
+  code { font-family: Consolas, "Courier New", monospace; font-size: 12px; }
+  textarea.mrz { height: 66px; font-size: 14px; letter-spacing: 1px; }
+  .fila { overflow: hidden; }
+  .fila button { float: right; margin-left: 8px; }
+  .fila .caja { overflow: hidden; }
+  .ayuda { color: #5b6773; font-size: 13px; margin: 5px 0 0 0; }
+  .seccion > .ayuda:first-of-type { margin-top: 0; }
+
+  /* Botones */
+  button {
+    font: inherit;
+    padding: 7px 14px;
+    border: 1px solid #aab4be;
+    border-radius: 4px;
+    background: #ffffff;
+    color: #1f2933;
+    cursor: pointer;
+  }
+  button:hover { background: #eef1f4; }
+  button.principal { background: #1d5fa8; border-color: #1d5fa8; color: #ffffff; }
+  button.principal:hover { background: #174d89; }
+  .acciones { margin-top: 16px; }
+  .acciones button { margin: 0 8px 6px 0; min-width: 120px; }
+
+  /* Tablas de datos */
+  table.datos { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  table.datos td { padding: 6px 8px; border-bottom: 1px solid #eef1f4; vertical-align: top; }
+  table.datos td.k { color: #5b6773; width: 40%; }
+
+  /* Imágenes */
+  .imagen { display: inline-block; vertical-align: top; margin: 14px 18px 0 0; text-align: center;
+            color: #5b6773; font-size: 13px; }
+  .imagen canvas { display: block; margin-bottom: 4px; border: 1px solid #d5dbe1; border-radius: 4px;
+                   background: #f8fafb; max-width: 260px; }
+
+  /* Resultado de cada sección */
+  /* Va arriba de cada pestaña, justo debajo de las pestañas, para que se vea siempre */
+  .resultado { margin: 16px 0 14px 0; padding: 12px 14px; border-radius: 4px; border: 1px solid #d5dbe1;
+               background: #f3f5f7; word-wrap: break-word; }
+  .resultado.correcto { background: #e6f4ea; border-color: #8fc7a0; color: #14532d; }
+  .resultado.error    { background: #fdecea; border-color: #e6a19a; color: #7f1d1d; }
+  .resultado strong { display: block; margin-bottom: 2px; }
+
+  /* Aviso de operación en curso: cubre la página y bloquea los clics mientras la tarjeta trabaja */
+  #espera { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 100;
+            background: rgba(243, 245, 247, 0.75); cursor: wait; }
+  #espera .caja-espera { position: absolute; top: 40%; left: 50%; width: 340px; margin-left: -186px;
+                         padding: 18px 16px; background: #fff; border: 1px solid #d5dbe1; border-radius: 6px;
+                         text-align: center; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12); }
+  #espera .reloj { font-size: 28px; line-height: 32px; color: #1d5fa8; }
+  #espera strong { display: block; margin: 6px 0 4px 0; }
+  #espera .ayuda { margin: 0; }
+
+  .pie { margin-top: 24px; text-align: center; color: #8a96a3; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="panel">
+
+  <div class="cabecera">
+    <img src="logoFNMT.png" alt="">
+    <div class="titulos">
+      <h1>Ejemplo de uso del DNIe</h1>
+      <p class="subtitulo">Datos del ciudadano y firma con el DNIe 4.0 y el DNIe 3.0, con ActiveX.</p>
+    </div>
+  </div>
+
+  <!-- Conexión -->
+  <div class="conexion" id="conexion">
+    <div class="botones">
+      <button type="button" class="principal" onclick="Ejecutar('resChip', 'Conectando con el DNIe', IniciarConexion)">Conectar</button>
+      <button type="button" onclick="Ejecutar('resChip', 'Desconectando', FinalizarConexion)">Desconectar</button>
+      <button type="button" onclick="Salir()">Salir</button>
+    </div>
+    <span class="indicador"></span><span id="textoConexion">Sin conexión. Inserte el DNIe y pulse «Conectar».</span>
+  </div>
+
+  <!-- Pestañas -->
+  <ul class="pestanas">
+    <li><a id="tab-chip" class="activa" onclick="Pestana('chip')">Chip</a></li>
+    <li><a id="tab-datos" onclick="Pestana('datos')">Datos personales</a></li>
+    <li><a id="tab-imagenes" onclick="Pestana('imagenes')">Imágenes</a></li>
+    <li><a id="tab-certificados" onclick="Pestana('certificados')">Certificados</a></li>
+    <li><a id="tab-firma" onclick="Pestana('firma')">Firma</a></li>
+    <li><a id="tab-fichero" onclick="Pestana('fichero')">Firmar archivo</a></li>
+  </ul>
+
+  <!-- Chip -->
+  <div class="seccion activa" id="sec-chip">
+    <div id="resChip" class="resultado">Conecte con el DNIe y pulse «Leer información».</div>
+    <p class="ayuda">Número de serie, versión y tipo de documento, y versiones de las librerías.</p>
+    <div class="acciones">
+      <button type="button" class="principal" onclick="Ejecutar('resChip', 'Leyendo la información del chip', InfoChip)">Leer información</button>
+      <button type="button" onclick="Ejecutar('resChip', 'Consultando las versiones', VersionesLibrerias)">Versiones</button>
+    </div>
+    <table class="datos" id="tablaChip"></table>
+  </div>
+
+  <!-- Datos personales -->
+  <div class="seccion" id="sec-datos">
+    <div id="resDatos" class="resultado">Pulse «Leer datos personales». La lectura tarda unos segundos.</div>
+    <p class="ayuda">El ActiveX le pedirá permiso antes de leer sus datos (con el DNIe 3.0, también el PIN).</p>
+    <div class="acciones">
+      <button type="button" class="principal" onclick="Ejecutar('resDatos', 'Leyendo los datos personales', DatosPersonales)">Leer datos personales</button>
+      <button type="button" onclick="Ejecutar('resDatos', 'Leyendo la MRZ', LeerMRZ)">Leer MRZ</button>
+    </div>
+    <table class="datos" id="tablaDatos"></table>
+    <label for="mrzOut">MRZ</label>
+    <textarea id="mrzOut" class="mrz" readonly></textarea>
+  </div>
+
+  <!-- Foto y firma manuscrita -->
+  <div class="seccion" id="sec-imagenes">
+    <div id="resImagenes" class="resultado">Pulse «Leer imágenes». La lectura tarda unos segundos.</div>
+    <p class="ayuda">Imágenes JPEG 2000 del chip, decodificadas con openjpeg.js. El ActiveX le pedirá permiso antes de leerlas.</p>
+    <div class="acciones">
+      <button type="button" class="principal" onclick="Ejecutar('resImagenes', 'Leyendo la foto y la firma manuscrita', LeerImagenes)">Leer imágenes</button>
+    </div>
+    <div class="imagen"><canvas id="canvasFoto" width="150" height="190"></canvas>Foto</div>
+    <div class="imagen"><canvas id="canvasFirma" width="220" height="90"></canvas>Firma manuscrita</div>
+  </div>
+
+  <!-- Certificados y claves públicas -->
+  <div class="seccion" id="sec-certificados">
+    <div id="resCert" class="resultado">Pulse «Buscar» para ver las etiquetas de la tarjeta.</div>
+    <h2>Certificados</h2>
+    <p class="ayuda">Autenticación, firma y autoridad intermedia. No necesitan PIN.</p>
+    <label for="listaCert">Certificado</label>
+    <div class="fila">
+      <button type="button" class="principal" onclick="Ejecutar('resCert', 'Leyendo el certificado', LeerCertificado)">Leer</button>
+      <button type="button" onclick="Ejecutar('resCert', 'Buscando los certificados', ListarCertificados)">Buscar</button>
+      <div class="caja"><select id="listaCert"></select></div>
+    </div>
+    <textarea id="certOut" readonly placeholder="Certificado (DER, hexadecimal)" style="margin-top: 8px"></textarea>
+
+    <h2>Claves públicas</h2>
+    <p class="ayuda">DNIe 4.0: punto de la curva elíptica (04 || X || Y). DNIe 3.0: módulo y exponente RSA.</p>
+    <label for="listaPub">Clave pública</label>
+    <div class="fila">
+      <button type="button" class="principal" onclick="Ejecutar('resCert', 'Leyendo la clave pública', LeerClavePublica)">Leer</button>
+      <button type="button" onclick="Ejecutar('resCert', 'Buscando las claves públicas', ListarClavesPublicas)">Buscar</button>
+      <div class="caja"><select id="listaPub"></select></div>
+    </div>
+    <textarea id="clavePubOut" readonly placeholder="Clave pública (hexadecimal)" style="margin-top: 8px"></textarea>
+  </div>
+
+  <!-- PIN, firma y verificación -->
+  <div class="seccion" id="sec-firma">
+    <div id="resFirma" class="resultado">Busque las claves privadas y firme. El PIN se pedirá cuando haga falta.</div>
+    <p class="ayuda">El PIN se pide en una ventana del propio ActiveX cuando hace falta (al buscar las claves
+      privadas o al firmar): la página no llega a verlo. También puede presentarlo antes con este botón.</p>
+    <div class="acciones">
+      <button type="button" onclick="Ejecutar('resFirma', 'Esperando el PIN', PresentarPIN)">Presentar PIN</button>
+    </div>
+
+    <label for="listaPriv">Clave privada</label>
+    <div class="fila">
+      <button type="button" onclick="Ejecutar('resFirma', 'Buscando las claves privadas', ListarClavesPrivadas)">Buscar</button>
+      <div class="caja"><select id="listaPriv" onchange="EmparejarPublica('listaPriv', 'listaPubVerif')"></select></div>
+    </div>
+    <p class="ayuda">Con la clave de firma, el driver pide confirmación antes de firmar.</p>
+
+    <label for="datos">Datos a firmar</label>
+    <textarea id="datos">Texto de prueba para firmar con el DNIe</textarea>
+
+    <label for="listaPubVerif">Clave pública para verificar</label>
+    <select id="listaPubVerif"></select>
+    <p class="ayuda">Se elige sola la que corresponde a la clave privada (KprivFirmaDigitalEC → KpuFirmaDigitalEC).</p>
+
+    <div class="acciones">
+      <button type="button" class="principal" onclick="Ejecutar('resFirma', 'Firmando con el DNIe', Firmar)">Firmar (SHA-256)</button>
+      <button type="button" onclick="Ejecutar('resFirma', 'Verificando la firma', Verificar)">Verificar firma</button>
+    </div>
+    <textarea id="firmaOut" readonly placeholder="Firma (hexadecimal)" style="margin-top: 8px"></textarea>
+  </div>
+
+  <!-- Firmar un archivo -->
+  <div class="seccion" id="sec-fichero">
+    <div id="resFichero" class="resultado">Elija un archivo. El PIN se pedirá cuando haga falta.</div>
+    <p class="ayuda">Se firma el resumen SHA-256 del archivo, que se calcula en esta página: el archivo no sale del
+      equipo ni se pasa entero al ActiveX (se le da el resumen en <code>hashIn</code>).</p>
+
+    <label for="fichero">Archivo</label>
+    <input type="file" id="fichero" onchange="ElegirFichero(this)">
+    <p class="ayuda" id="resumenFichero"></p>
+
+    <label for="listaPrivF">Clave privada</label>
+    <div class="fila">
+      <button type="button" onclick="Ejecutar('resFichero', 'Buscando las claves', ListarClavesFichero)">Buscar</button>
+      <div class="caja"><select id="listaPrivF" onchange="EmparejarPublica('listaPrivF', 'listaPubF')"></select></div>
+    </div>
+
+    <div class="acciones">
+      <button type="button" class="principal" onclick="Ejecutar('resFichero', 'Firmando el archivo con el DNIe', FirmarFichero)">Firmar archivo</button>
+      <button type="button" onclick="GuardarFirma()">Guardar firma (.sig)</button>
+    </div>
+    <textarea id="firmaFicheroOut" readonly placeholder="Firma del archivo (hexadecimal)" style="margin-top: 8px"></textarea>
+
+    <h2>Verificar un archivo firmado</h2>
+    <p class="ayuda">Elija arriba el archivo y aquí su firma (.sig). Si no elige firma, se verifica la última generada.
+      La clave pública tiene que ser la del par con el que se hizo la firma.</p>
+    <label for="ficheroFirma">Firma (.sig)</label>
+    <input type="file" id="ficheroFirma" onchange="ElegirFirma(this)">
+    <p class="ayuda" id="queFirma">Se verificará la última firma generada.</p>
+    <label for="listaPubF">Clave pública</label>
+    <div class="fila">
+      <button type="button" class="principal" onclick="Ejecutar('resFichero', 'Verificando la firma del archivo', VerificarFichero)">Verificar</button>
+      <div class="caja"><select id="listaPubF"></select></div>
+    </div>
+
+    <p class="ayuda" style="margin-top: 16px">La firma es en bruto (RSA PKCS#1 v1.5 en el DNIe 3.0, ECDSA r||s en el DNIe 4.0),
+      no un formato de firma de documentos (CAdES, PAdES o XAdES). Para firmar documentos con esos formatos, use AutoFirma.</p>
+  </div>
+
+  <p class="pie">FNMT-RCM · Ejemplo de uso del DNIe con ActiveX 1.0</p>
+</div>
+
+<!-- Aviso de operación en curso -->
+<div id="espera">
+  <div class="caja-espera">
+    <div class="reloj">&#8987;</div>
+    <strong id="textoEspera">Operación en curso</strong>
+    <p class="ayuda">Espere, por favor. No retire el DNIe del lector.</p>
+  </div>
+</div>
+
+<script type="text/javascript" src="openjpeg.js"></script>
+<script type="text/javascript">
+// ==================================================================================================
+//  1. Crear el control ActiveX
+// ==================================================================================================
+//  "FNMT.ActiveXDNIe" es el ProgID con el que se registra la DLL. Se crea una sola vez.
+
+var ax = null;
+var ultimaFirma = null;   // FirmaOut tal como la devuelve el ActiveX (bruto)
+
+function Objeto(idRes) {
+  if (ax == null) {
+    try {
+      ax = new ActiveXObject("FNMT.ActiveXDNIe");
+    } catch (e) {
+      Mostrar(idRes, "error", "No se puede crear el ActiveX",
+              "Compruebe que está registrado (regsvr32) con la misma arquitectura que el navegador y " +
+              "que la página se abre con abrir.cmd o en Edge en modo Internet Explorer. (" + e.message + ")");
+      return null;
+    }
+  }
+  return ax;
+}
+
+// ==================================================================================================
+//  2. Operaciones en curso
+// ==================================================================================================
+//  Las llamadas al ActiveX bloquean la página hasta que terminan (la tarjeta puede tardar varios
+//  segundos). Ejecutar() muestra antes el aviso, espera a que el navegador lo pinte, ejecuta la
+//  operación y lo quita. Mientras está el aviso, los demás clics se ignoran.
+
+var ocupado = false;
+
+window.attachEvent ? window.attachEvent("onload", GuardarTextosIniciales) : window.addEventListener("load", GuardarTextosIniciales);
+
+function MostrarEspera(mensaje) {
+  ocupado = true;
+  document.getElementById("textoEspera").innerHTML = mensaje + "…";
+  document.getElementById("espera").style.display = "block";
+}
+
+// Se espera un poco antes de quitar el aviso para descartar los clics hechos mientras la página
+// estaba bloqueada.
+function QuitarEspera() {
+  setTimeout(function () {
+    document.getElementById("espera").style.display = "none";
+    ocupado = false;
+  }, 300);
+}
+
+function Ejecutar(idRes, mensaje, operacion) {
+  if (ocupado) return;
+  if (!Objeto(idRes)) return;
+  MostrarEspera(mensaje);
+  setTimeout(function () {
+    try {
+      operacion();
+    } catch (e) {
+      Mostrar(idRes, "error", "Error inesperado", e.message);
+    }
+    QuitarEspera();
+  }, 50);
+}
+
+// ==================================================================================================
+//  3. Utilidades de la página
+// ==================================================================================================
+
+function Pestana(nombre) {
+  if (ocupado) return;
+  var nombres = ["chip", "datos", "imagenes", "certificados", "firma", "fichero"];
+  for (var i = 0; i < nombres.length; i++) {
+    var activa = (nombres[i] == nombre);
+    document.getElementById("tab-" + nombres[i]).className = activa ? "activa" : "";
+    document.getElementById("sec-" + nombres[i]).className = activa ? "seccion activa" : "seccion";
+  }
+}
+
+// Muestra el resultado en el recuadro de la sección. tipo: "correcto", "error" o "" (neutro).
+// Se usa createTextNode para que los datos se muestren tal cual (sin interpretarse como HTML).
+function Mostrar(idRes, tipo, titulo, detalle) {
+  var r = document.getElementById(idRes);
+  r.className = "resultado " + tipo;
+  r.innerHTML = "";
+  var b = document.createElement("strong");
+  b.appendChild(document.createTextNode(titulo));
+  r.appendChild(b);
+  if (detalle) r.appendChild(document.createTextNode(detalle));
+  // Si se ha bajado en la página y el recuadro ha quedado fuera de la vista, se sube hasta él
+  var pos = r.getBoundingClientRect();
+  var alto = window.innerHeight || document.documentElement.clientHeight;
+  if (pos.top < 0 || pos.bottom > alto) r.scrollIntoView(true);
+}
+
+// true si el último método fue correcto; si no, muestra el error en la sección
+function Correcto(idRes, operacion) {
+  var rv = ax.lastresultOut;
+  if (rv == 0) return true;
+  // Tarjeta sacada o cambiada: se borra de la página todo lo que se mostró de la anterior
+  if (rv == 0x32 || rv == 0xE0) OlvidarTarjeta();
+  var hex = (rv >>> 0).toString(16).toUpperCase();
+  Mostrar(idRes, "error", operacion + ": error " + rv + " (0x" + hex + ")", Explicacion(rv));
+  return false;
+}
+
+function Explicacion(rv) {
+  switch (rv) {
+    case 0x32:  return "Se ha cambiado la tarjeta. Ya está conectado con la nueva: repita la operación.";
+    case 0x30:  return "Error de comunicación con la tarjeta. Sáquela, vuelva a insertarla y conecte de nuevo.";
+    case 0x54:  return "Función no disponible en esta versión.";
+    case 0x63:  return "La clave no es de ese tipo (RSA / curva elíptica).";
+    case 0xA0:  return "PIN incorrecto.";
+    case 0xA4:  return "PIN bloqueado.";
+    case 0xB3:  return "No hay conexión. Pulse «Conectar».";
+    case 0xC0:  return "La firma no es válida.";
+    case 0xE0:  return "No hay tarjeta en el lector.";
+    case 0x101: return "Hay que presentar el PIN.";
+    case 0x90:  return "Hay otra operación del ActiveX en curso (ventana del PIN o del permiso abierta).";
+    case 0x50:  return "Operación cancelada por el usuario.";
+    case 0x200: return "El usuario no ha permitido leer sus datos personales. Para volver a preguntar, desconecte y conecte de nuevo.";
+    default:    return "";
+  }
+}
+
+// Texto con un carácter por byte -> hexadecimal
+function aHex(s) {
+  var r = [];
+  for (var i = 0; i < s.length; i++) {
+    var h = (s.charCodeAt(i) & 0xFF).toString(16).toUpperCase();
+    r.push(h.length < 2 ? "0" + h : h);
+  }
+  return r.join("");
+}
+
+// Texto con un carácter por byte -> Uint8Array
+function aBytes(s) {
+  var a = new Uint8Array(s.length);
+  for (var i = 0; i < s.length; i++) a[i] = s.charCodeAt(i) & 0xFF;
+  return a;
+}
+
+// Rellena una tabla de dos columnas con [etiqueta, valor]
+function Tabla(idTabla, filas) {
+  var t = document.getElementById(idTabla);
+  while (t.rows.length > 0) t.deleteRow(0);
+  for (var i = 0; i < filas.length; i++) {
+    var tr = t.insertRow(-1);
+    var k = tr.insertCell(-1);
+    k.className = "k";
+    k.appendChild(document.createTextNode(filas[i][0]));
+    tr.insertCell(-1).appendChild(document.createTextNode(filas[i][1]));
+  }
+}
+
+function Rellenar(idSelect) {
+  var sel = document.getElementById(idSelect);
+  while (sel.options.length > 0) sel.remove(0);
+  var n = ax.ArrayEtiquetasLenOut;
+  for (var i = 0; i < n; i++) sel.options[sel.options.length] = new Option(ax.EtiquetaOut(i));
+  return n;
+}
+
+function Seleccion(idSelect) {
+  var sel = document.getElementById(idSelect);
+  return sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex].text : "";
+}
+
+// Borra de la página todo lo que se haya obtenido de la tarjeta: datos, MRZ, imágenes, listas,
+// certificado, clave pública y firmas, y vuelve a poner los textos iniciales de cada sección. Se
+// llama al conectar, al desconectar y cuando el ActiveX avisa de que se ha sacado o cambiado la
+// tarjeta. El archivo elegido y su resumen se mantienen (no son de la tarjeta).
+var textosIniciales = null;
+
+function GuardarTextosIniciales() {
+  if (textosIniciales != null) return;
+  var res = ["resChip", "resDatos", "resImagenes", "resCert", "resFirma", "resFichero"];
+  textosIniciales = {};
+  for (var i = 0; i < res.length; i++) textosIniciales[res[i]] = document.getElementById(res[i]).innerHTML;
+}
+
+function OlvidarTarjeta() {
+  var res = ["resChip", "resDatos", "resImagenes", "resCert", "resFirma", "resFichero"];
+  GuardarTextosIniciales();
+  for (var i = 0; i < res.length; i++) {
+    var r = document.getElementById(res[i]);
+    r.className = "resultado";
+    r.innerHTML = textosIniciales[res[i]];
+  }
+  var tablas = ["tablaChip", "tablaDatos"];
+  for (var i = 0; i < tablas.length; i++) Tabla(tablas[i], []);
+  var lienzos = ["canvasFoto", "canvasFirma"];
+  for (var i = 0; i < lienzos.length; i++) {
+    var c = document.getElementById(lienzos[i]);
+    c.getContext("2d").clearRect(0, 0, c.width, c.height);
+  }
+  var listas = document.getElementsByTagName("select");
+  for (var i = 0; i < listas.length; i++)
+    while (listas[i].options.length > 0) listas[i].remove(0);
+  var cajas = ["mrzOut", "certOut", "clavePubOut", "firmaOut", "firmaFicheroOut"];
+  for (var i = 0; i < cajas.length; i++) document.getElementById(cajas[i]).value = "";
+  ultimaFirma = null;
+  firmaFichero = null;
+  OlvidarFirmaElegida();
+}
+
+function EstadoConexion(conectado) {
+  document.getElementById("conexion").className = "conexion" + (conectado ? " conectado" : "");
+  document.getElementById("textoConexion").innerHTML = conectado ? "Conectado con el DNIe."
+    : "Sin conexión. Inserte el DNIe y pulse «Conectar».";
+}
+
+// ==================================================================================================
+//  4. Conexión e información del chip
+// ==================================================================================================
+
+function IniciarConexion() {
+  OlvidarTarjeta();
+  ax.InicializarConexion();
+  if (!Correcto("resChip", "Conectar")) { EstadoConexion(false); return; }
+  EstadoConexion(true);
+  Mostrar("resChip", "", "Conexión iniciada.", "Pulse «Leer información» o elija otra pestaña.");
+}
+
+function FinalizarConexion() {
+  ax.FinalizarConexion();
+  OlvidarTarjeta();
+  EstadoConexion(false);
+  Correcto("resChip", "Desconectar");
+}
+
+// Cierra la conexión (y con ella el PIN y los datos leídos) y la ventana. En la HTA se cierra sin
+// más; en Edge en modo IE el navegador suele pedir confirmación. window.top es la ventana de la HTA,
+// porque esta página está dentro de su marco.
+function Salir() {
+  if (ocupado) return;
+  try { if (ax != null) ax.FinalizarConexion(); } catch (e) { }
+  window.top.close();
+}
+
+function VersionesLibrerias() {
+  ax.ObtenerVersionesLibrerias();
+  if (!Correcto("resChip", "Versiones")) return;
+  var filas = [];
+  for (var i = 0; i < ax.ArrayVersionLibreriasLenOut; i++)
+    filas.push([ax.NombreLibreriaOut(i), ax.VersionLibreriaOut(i)]);
+  Tabla("tablaChip", filas);
+  Mostrar("resChip", "correcto", "Versiones de las librerías.");
+}
+
+function InfoChip() {
+  var filas = [];
+  ax.ObtenerNumeroSerie();
+  if (!Correcto("resChip", "Número de serie")) return;
+  filas.push(["Número de serie", aHex(ax.NumeroSerieOut)]);
+
+  ax.ObtenerVersionDNIe();
+  if (!Correcto("resChip", "Versión")) return;
+  filas.push(["Versión", ax.DatosOut]);
+
+  ax.ObtenerTipoDocumento();
+  if (!Correcto("resChip", "Tipo de documento")) return;
+  filas.push(["Tipo de documento", aHex(ax.DatosOut)]);
+
+  Tabla("tablaChip", filas);
+  Mostrar("resChip", "correcto", "Información del chip leída.");
+}
+
+// ==================================================================================================
+//  5. Datos personales, MRZ e imágenes (sin PIN)
+// ==================================================================================================
+//  Cada propiedad lee el chip la primera vez (igual que el ActiveX publicado).
+
+var CAMPOS = [
+  ["Nombre", "NombreOut"], ["Primer apellido", "Apellido1Out"], ["Segundo apellido", "Apellido2Out"],
+  ["Número de DNI", "NumeroDNIOut"], ["Fecha de nacimiento", "FechaNacimientoOut"],
+  ["Nacionalidad", "NacionalidadOut"], ["Sexo", "SexoOut"], ["Fecha de caducidad", "FechaExpiracionOut"],
+  ["Localidad de nacimiento", "LocalidadNacimientoOut"], ["Provincia de nacimiento", "ProvinciaNacimientoOut"],
+  ["Nombre de los padres", "NombrePadresOut"], ["Domicilio", "DomicilioOut"],
+  ["Localidad del domicilio", "LocalidadDomicilioOut"], ["Provincia del domicilio", "ProvinciaDomicilioOut"]
+];
+
+function DatosPersonales() {
+  var filas = [];
+  for (var i = 0; i < CAMPOS.length; i++) {
+    var v = ax[CAMPOS[i][1]];
+    if (!Correcto("resDatos", "Datos personales")) return;
+    filas.push([CAMPOS[i][0], v]);
+  }
+  ax.ObtenerNumeroSerie_Soporte();
+  if (!Correcto("resDatos", "Número de soporte")) return;
+  filas.push(["Número de soporte", ax.DatosOut]);
+  Tabla("tablaDatos", filas);
+  Mostrar("resDatos", "correcto", "Datos personales leídos.");
+}
+
+function LeerMRZ() {
+  ax.ObtenerMRZ();
+  if (!Correcto("resDatos", "MRZ")) return;
+  // La MRZ del DNIe (formato TD1) son 3 líneas de 30 caracteres
+  var m = ax.DatosOut;
+  document.getElementById("mrzOut").value = m.substr(0, 30) + "\r\n" + m.substr(30, 30) + "\r\n" + m.substr(60, 30);
+  Mostrar("resDatos", "correcto", "MRZ leída.");
+}
+
+// Dibuja una imagen JPEG 2000 en un canvas con openjpeg.js
+function Pintar(idCanvas, bytes) {
+  var formato = (bytes[0] == 0xFF && bytes[1] == 0x4F) ? "j2k" : "jp2";
+  var img = openjpeg(bytes, formato);
+  var canvas = document.getElementById(idCanvas);
+  canvas.width = img.width;
+  canvas.height = img.height;
+  var ctx = canvas.getContext("2d");
+  var rgba = ctx.createImageData(img.width, img.height);
+  var n = img.width * img.height, gris = (img.data.length < 3 * n);
+  for (var i = 0, j = 0; j < n; i += 4, j++) {
+    rgba.data[i]     = img.data[j];
+    rgba.data[i + 1] = gris ? img.data[j] : img.data[j + n];
+    rgba.data[i + 2] = gris ? img.data[j] : img.data[j + 2 * n];
+    rgba.data[i + 3] = 255;
+  }
+  ctx.putImageData(rgba, 0, 0);
+}
+
+function LeerImagenes() {
+  var foto = ax.ImagenFacialOut;
+  if (!Correcto("resImagenes", "Foto")) return;
+  var firma = ax.ImagenFirmaOut;
+  if (!Correcto("resImagenes", "Firma manuscrita")) return;
+  var tam = "Foto: " + foto.length + " bytes. Firma manuscrita: " + firma.length + " bytes.";
+  if (typeof openjpeg != "function") {
+    Mostrar("resImagenes", "error", "Imágenes leídas, pero no se pueden mostrar",
+            "Copie openjpeg.js en la carpeta de esta página. " + tam);
+    return;
+  }
+  try {
+    Pintar("canvasFoto", aBytes(foto));
+    Pintar("canvasFirma", aBytes(firma));
+    Mostrar("resImagenes", "correcto", "Imágenes leídas.", tam);
+  } catch (e) {
+    Mostrar("resImagenes", "error", "No se pudieron decodificar las imágenes", e.message + " " + tam);
+  }
+}
+
+// ==================================================================================================
+//  6. Certificados y claves públicas (sin PIN)
+// ==================================================================================================
+
+function ListarCertificados() {
+  ax.ObtenerEtiquetasTodosCertificados();
+  if (Correcto("resCert", "Certificados"))
+    Mostrar("resCert", "correcto", Rellenar("listaCert") + " certificados.");
+}
+
+function LeerCertificado() {
+  ax.EtiquetaCertificadoIn = Seleccion("listaCert");
+  ax.ObtenerCertificado();
+  if (!Correcto("resCert", "Leer certificado")) return;
+  var c = ax.DatosOut;
+  document.getElementById("certOut").value = aHex(c);
+  Mostrar("resCert", "correcto", "Certificado leído (" + c.length + " bytes).");
+}
+
+// Las listas de claves públicas de todas las pestañas se rellenan a la vez
+function RellenarPublicas() {
+  Rellenar("listaPubVerif");
+  Rellenar("listaPubF");
+  return Rellenar("listaPub");
+}
+
+function ListarClavesPublicas() {
+  ax.ObtenerEtiquetasClavesPublicas();
+  if (!Correcto("resCert", "Claves públicas")) return;
+  Mostrar("resCert", "correcto", RellenarPublicas() + " claves públicas.");
+}
+
+// Prueba primero curva elíptica (DNIe 4.0) y, si la clave no es EC, RSA (DNIe 3.0)
+function LeerClavePublica() {
+  ax.EtiquetaKeyPubIn = Seleccion("listaPub");
+  ax.ObtenerClavePublicaEC();
+  if (ax.lastresultOut == 0) {
+    document.getElementById("clavePubOut").value = aHex(ax.DatosOut);
+    Mostrar("resCert", "correcto", "Clave de curva elíptica: punto público.");
+    return;
+  }
+  ax.ObtenerClavePublicaRSA();
+  if (!Correcto("resCert", "Leer clave pública")) return;
+  document.getElementById("clavePubOut").value =
+    "Módulo:\r\n" + aHex(ax.ModuloOut) + "\r\nExponente: " + aHex(ax.ExponenteOut);
+  Mostrar("resCert", "correcto", "Clave RSA: módulo y exponente.");
+}
+
+// ==================================================================================================
+//  7. PIN, firma y verificación
+// ==================================================================================================
+
+// Sin PinIn, PresentarPin muestra la ventana de PIN del ActiveX (la página no ve el PIN)
+function PresentarPIN() {
+  ax.PinIn = "";
+  ax.PresentarPin();
+  if (Correcto("resFirma", "Presentar PIN")) Mostrar("resFirma", "correcto", "PIN correcto.");
+}
+
+// Busca las claves privadas y, para verificar, también las públicas
+function BuscarClaves(idRes) {
+  ax.ObtenerEtiquetasClavesPrivadas();
+  if (!Correcto(idRes, "Claves privadas")) return;
+  Rellenar("listaPrivF");
+  var n = Rellenar("listaPriv");
+  ax.ObtenerEtiquetasClavesPublicas();
+  if (!Correcto(idRes, "Claves públicas")) return;
+  RellenarPublicas();
+  EmparejarPublica("listaPriv", "listaPubVerif");
+  EmparejarPublica("listaPrivF", "listaPubF");
+  Mostrar(idRes, "correcto", n + " claves privadas.");
+}
+
+// Selecciona la clave pública que corresponde a la privada elegida: KprivXxx -> KpuXxx
+function EmparejarPublica(idPriv, idPub) {
+  var nucleo = Seleccion(idPriv).replace(/^Kpriv/, "");
+  var sel = document.getElementById(idPub);
+  for (var i = 0; i < sel.options.length; i++) {
+    if (sel.options[i].text.replace(/^Kpub?/, "") == nucleo) { sel.selectedIndex = i; return; }
+  }
+}
+
+function ListarClavesPrivadas() { BuscarClaves("resFirma"); }
+function ListarClavesFichero()  { BuscarClaves("resFichero"); }
+
+function Firmar() {
+  EmparejarPublica("listaPriv", "listaPubVerif");
+  ax.EtiquetaKeyPrivIn = Seleccion("listaPriv");
+  ax.DatosIn = document.getElementById("datos").value;
+  ax.Firmar();
+  if (!Correcto("resFirma", "Firmar")) return;
+  ultimaFirma = ax.FirmaOut;
+  document.getElementById("firmaOut").value = aHex(ultimaFirma);
+  Mostrar("resFirma", "correcto", "Firma generada (" + ultimaFirma.length + " bytes).");
+}
+
+function Verificar() {
+  if (ultimaFirma == null) { Mostrar("resFirma", "error", "Primero hay que firmar."); return; }
+  ax.EtiquetaKeyPubIn = Seleccion("listaPubVerif");
+  ax.DatosIn = document.getElementById("datos").value;
+  ax.FirmaIn = ultimaFirma;
+  ax.Verificar();
+  if (Correcto("resFirma", "Verificar")) Mostrar("resFirma", "correcto", "La firma es válida.");
+}
+
+// ==================================================================================================
+//  8. Firmar un archivo
+// ==================================================================================================
+//  El archivo se lee en la página (FileReader) y se calcula su SHA-256 (Sha256()). Al ActiveX solo
+//  se le pasa el resumen, en hashIn, con un carácter por byte. hashIn se consume en cada Firmar o
+//  Verificar, así que se vuelve a dar antes de cada llamada.
+
+var resumenFichero = null;   // SHA-256 del archivo elegido (texto con un carácter por byte)
+var nombreFichero = "";
+var firmaFichero = null;     // última firma del archivo (bruto)
+var firmaElegida = null;     // firma leída de un archivo .sig (bruto)
+
+function LeerComoBytes(input, alTerminar) {
+  if (!input.files || input.files.length == 0) { alTerminar(null, ""); return; }
+  if (typeof FileReader == "undefined") {
+    Mostrar("resFichero", "error", "Este navegador no puede leer archivos",
+            "Hace falta el modo de documento IE10 o superior.");
+    return;
+  }
+  var f = input.files[0];
+  var lector = new FileReader();
+  lector.onload = function () { alTerminar(new Uint8Array(lector.result), f.name); };
+  lector.onerror = function () { Mostrar("resFichero", "error", "No se pudo leer el archivo", f.name); QuitarEspera(); };
+  lector.readAsArrayBuffer(f);
+}
+
+// Indica qué firma se va a verificar: la del .sig elegido o la última generada
+function QueFirma(texto) {
+  var q = document.getElementById("queFirma");
+  q.innerHTML = "";
+  q.appendChild(document.createTextNode(texto));
+}
+
+// Quita el .sig elegido (en Internet Explorer un input de archivo no se vacía con value = "")
+function OlvidarFirmaElegida() {
+  firmaElegida = null;
+  var viejo = document.getElementById("ficheroFirma");
+  viejo.parentNode.replaceChild(viejo.cloneNode(false), viejo);
+  QueFirma(firmaFichero != null ? "Se verificará la última firma generada."
+                                : "Elija la firma (.sig) o firme antes el archivo.");
+}
+
+function ElegirFichero(input) {
+  if (ocupado) return;
+  resumenFichero = null;
+  firmaFichero = null;
+  OlvidarFirmaElegida();
+  document.getElementById("firmaFicheroOut").value = "";
+  document.getElementById("resumenFichero").innerHTML = "";
+  MostrarEspera("Calculando el resumen del archivo");
+  LeerComoBytes(input, function (bytes, nombre) {
+    setTimeout(function () {
+      if (bytes != null) {
+        var h = Sha256(bytes);
+        resumenFichero = BytesATexto(h);
+        nombreFichero = nombre;
+        document.getElementById("resumenFichero").innerHTML = "";
+        document.getElementById("resumenFichero").appendChild(document.createTextNode(
+          bytes.length + " bytes. SHA-256: " + aHex(resumenFichero)));
+        Mostrar("resFichero", "", "Archivo preparado.", "Elija la clave privada y pulse «Firmar archivo».");
+      }
+      QuitarEspera();
+    }, 50);
+  });
+}
+
+function ElegirFirma(input) {
+  if (ocupado) return;
+  firmaElegida = null;
+  LeerComoBytes(input, function (bytes, nombre) {
+    if (bytes == null) { OlvidarFirmaElegida(); return; }
+    firmaElegida = BytesATexto(bytes);
+    QueFirma("Se verificará la firma de " + nombre + " (" + firmaElegida.length + " bytes).");
+  });
+}
+
+function FirmarFichero() {
+  if (resumenFichero == null) { Mostrar("resFichero", "error", "Primero elija un archivo."); return; }
+  EmparejarPublica("listaPrivF", "listaPubF");
+  ax.EtiquetaKeyPrivIn = Seleccion("listaPrivF");
+  ax.hashIn = resumenFichero;
+  ax.Firmar();
+  if (!Correcto("resFichero", "Firmar archivo")) return;
+  firmaFichero = ax.FirmaOut;
+  document.getElementById("firmaFicheroOut").value = aHex(firmaFichero);
+  OlvidarFirmaElegida();      // tras firmar se verifica la firma nueva, salvo que se elija otro .sig
+  Mostrar("resFichero", "correcto", "Archivo firmado (" + firmaFichero.length + " bytes de firma).",
+          "Puede guardar la firma con «Guardar firma (.sig)».");
+}
+
+function VerificarFichero() {
+  if (resumenFichero == null) { Mostrar("resFichero", "error", "Primero elija el archivo firmado."); return; }
+  var firma = firmaElegida != null ? firmaElegida : firmaFichero;
+  if (firma == null) { Mostrar("resFichero", "error", "Elija la firma (.sig) o firme antes el archivo."); return; }
+  ax.EtiquetaKeyPubIn = Seleccion("listaPubF");
+  ax.hashIn = resumenFichero;
+  ax.FirmaIn = firma;
+  ax.Verificar();
+  if (Correcto("resFichero", "Verificar archivo"))
+    Mostrar("resFichero", "correcto", "La firma del archivo es válida.");
+}
+
+// Guarda la firma con el diálogo de descarga del navegador: el usuario elige dónde
+function GuardarFirma() {
+  if (ocupado) return;
+  if (firmaFichero == null) { Mostrar("resFichero", "error", "Primero firme un archivo."); return; }
+  if (typeof Blob == "undefined" || !window.navigator.msSaveOrOpenBlob) {
+    Mostrar("resFichero", "error", "No se puede guardar desde esta página",
+            "Copie la firma en hexadecimal del recuadro.");
+    return;
+  }
+  window.navigator.msSaveOrOpenBlob(new Blob([aBytes(firmaFichero)], { type: "application/octet-stream" }),
+                                    (nombreFichero || "fichero") + ".sig");
+}
+
+// Uint8Array o array de bytes -> texto con un carácter por byte (la convención del ActiveX).
+// Se copia a un array normal por trozos: en el modo Internet Explorer, Array.prototype.slice y
+// apply no funcionan bien con Uint8Array.
+function BytesATexto(b) {
+  var partes = [], trozo = [];
+  for (var i = 0; i < b.length; i++) {
+    trozo.push(b[i]);
+    if (trozo.length == 4096 || i == b.length - 1) {
+      partes.push(String.fromCharCode.apply(null, trozo));
+      trozo = [];
+    }
+  }
+  return partes.join("");
+}
+
+// SHA-256 (FIPS 180-4) en JavaScript compatible con el modo Internet Explorer. Devuelve 32 bytes.
+function Sha256(datos) {
+  var K = [
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2];
+  var H = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
+  var n = datos.length;
+  var total = ((n + 9 + 63) >> 6) << 6;          // con relleno: múltiplo de 64 bytes
+  var W = new Array(64);
+  for (var bloque = 0; bloque < total; bloque += 64) {
+    for (var t = 0; t < 16; t++) {
+      var w = 0;
+      for (var k = 0; k < 4; k++) {
+        var i = bloque + t * 4 + k, b;
+        if (i < n) b = datos[i];
+        else if (i == n) b = 0x80;
+        else if (i >= total - 4) b = (n * 8 >>> ((total - 1 - i) * 8)) & 0xFF;   // longitud en bits
+        else if (i >= total - 8) b = (Math.floor(n / 0x20000000) >>> ((total - 5 - i) * 8)) & 0xFF;
+        else b = 0;
+        w = (w << 8) | b;
+      }
+      W[t] = w;
+    }
+    for (t = 16; t < 64; t++) {
+      var x = W[t - 15], y = W[t - 2];
+      var s0 = ((x >>> 7) | (x << 25)) ^ ((x >>> 18) | (x << 14)) ^ (x >>> 3);
+      var s1 = ((y >>> 17) | (y << 15)) ^ ((y >>> 19) | (y << 13)) ^ (y >>> 10);
+      W[t] = (W[t - 16] + s0 + W[t - 7] + s1) | 0;
+    }
+    var a = H[0], b2 = H[1], c = H[2], d = H[3], e = H[4], f = H[5], g = H[6], h = H[7];
+    for (t = 0; t < 64; t++) {
+      var S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
+      var ch = (e & f) ^ (~e & g);
+      var t1 = (h + S1 + ch + K[t] + W[t]) | 0;
+      var S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
+      var maj = (a & b2) ^ (a & c) ^ (b2 & c);
+      var t2 = (S0 + maj) | 0;
+      h = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b2; b2 = a; a = (t1 + t2) | 0;
+    }
+    H[0] = (H[0] + a) | 0; H[1] = (H[1] + b2) | 0; H[2] = (H[2] + c) | 0; H[3] = (H[3] + d) | 0;
+    H[4] = (H[4] + e) | 0; H[5] = (H[5] + f) | 0; H[6] = (H[6] + g) | 0; H[7] = (H[7] + h) | 0;
+  }
+  var r = [];
+  for (var j = 0; j < 8; j++) r.push((H[j] >>> 24) & 0xFF, (H[j] >>> 16) & 0xFF, (H[j] >>> 8) & 0xFF, H[j] & 0xFF);
+  return r;
+}
+</script>
+</body>
+</html>

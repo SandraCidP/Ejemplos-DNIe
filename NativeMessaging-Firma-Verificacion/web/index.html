@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<!--
+  ============================================================================
+   index.html  -  Página de ejemplo: firmar y verificar con el DNIe
+  ============================================================================
+   Esta página firma con el DNIe desde Chrome, Edge o Firefox. No habla con
+   el DNIe directamente (un navegador no lo permite): usa la biblioteca
+   dniefirma.js, que pasa las peticiones a una extensión del navegador, y
+   esta a un programa instalado en el equipo.
+
+       index.html ─▶ dniefirma.js ─▶ extensión ─▶ DNIeAnfitrion.exe ─▶ DNIe
+
+   Todo lo que la página hace con la firma está en el <script> del final.
+
+   REQUISITOS
+     1. El programa de firma, compilado y registrado
+        (scripts\compilar.cmd y scripts\registrar.cmd).
+     2. La extensión cargada en el navegador (carpeta extension\).
+     3. Abrir la página desde http://localhost:8080/ (web\servir.cmd), que es
+        el origen que la extensión tiene en su lista. Abierta con doble clic
+        (file://...) no funciona.
+  ============================================================================
+-->
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Firma con DNIe 4.0</title>
+    <!-- Icono de la página (el que aparece en la pestaña del navegador). -->
+    <link rel="icon" href="logoFNMT.ico">
+    <style>
+        body {
+            font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+            font-size: 15px;
+            color: #1f2933;
+            background: #f3f5f7;
+            margin: 0;
+            padding: 24px 16px;
+        }
+        .panel {
+            max-width: 640px;
+            margin: 0 auto;
+            background: #ffffff;
+            border: 1px solid #d5dbe1;
+            border-radius: 6px;
+            padding: 24px 28px 28px 28px;
+        }
+        .cabecera { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; }
+        .cabecera img { width: 48px; height: 48px; }
+        h1 { font-size: 22px; font-weight: 600; margin: 2px 0 4px 0; }
+        .subtitulo { color: #5b6773; margin: 0; }
+        .ayuda { color: #5b6773; font-size: 13px; margin: 12px 0 0 0; }
+        /* Línea de estado: un punto de color y el DNIe detectado. */
+        #estado { color: #5b6773; font-size: 13px; margin: 0 0 16px 0; }
+        #estado::before {
+            content: "";
+            display: inline-block;
+            width: 9px;
+            height: 9px;
+            margin-right: 7px;
+            border-radius: 50%;
+            background: #aab4be;
+        }
+        #estado.detectado { color: #14532d; }
+        #estado.detectado::before { background: #2e9e56; }
+        #estado.fallo::before { background: #c8453a; }
+        button {
+            font: inherit;
+            padding: 7px 14px;
+            min-width: 120px;
+            border: 1px solid #aab4be;
+            border-radius: 4px;
+            background: #ffffff;
+            color: #1f2933;
+            cursor: pointer;
+        }
+        button:hover { background: #eef1f4; }
+        button:disabled { opacity: 0.55; cursor: default; }
+        button.principal { background: #1d5fa8; border-color: #1d5fa8; color: #ffffff; }
+        button.principal:hover { background: #174d89; }
+        .acciones { display: flex; flex-wrap: wrap; gap: 8px; }
+        #resultado {
+            margin-top: 24px;
+            padding: 12px 14px;
+            border-radius: 4px;
+            border: 1px solid #d5dbe1;
+            background: #f3f5f7;
+            overflow-wrap: anywhere;
+        }
+        #resultado.correcto { background: #e6f4ea; border-color: #8fc7a0; color: #14532d; }
+        #resultado.error    { background: #fdecea; border-color: #e6a19a; color: #7f1d1d; }
+        #resultado strong { display: block; margin-bottom: 2px; }
+    </style>
+</head>
+<body>
+    <div class="panel">
+        <div class="cabecera">
+            <img src="logoFNMT.png" alt="">
+            <div>
+                <h1 id="titulo">Firma electrónica con DNIe 4.0</h1>
+                <p class="subtitulo">Firme un archivo con su DNI electrónico o compruebe una firma.</p>
+            </div>
+        </div>
+
+        <p id="estado" role="status">Comprobando el lector…</p>
+
+        <div class="acciones">
+            <button type="button" class="principal" id="botonFirmar">Firmar un archivo…</button>
+            <button type="button" id="botonVerificar">Verificar una firma…</button>
+            <button type="button" id="botonLimpiar">Limpiar</button>
+        </div>
+        <p class="ayuda">
+            El archivo se elige en un diálogo de Windows. La firma se guarda junto a él,
+            con el mismo nombre terminado en <code>.p7s</code>.
+        </p>
+
+        <div id="resultado" role="status">Pulse «Firmar un archivo…» para empezar.</div>
+    </div>
+
+    <!-- La biblioteca: crea el objeto DNIeFirma que se usa más abajo. -->
+    <script src="dniefirma.js"></script>
+
+    <script>
+        // ====================================================================
+        //  1. Utilidades de la página (nada específico de la firma)
+        // ====================================================================
+
+        const MENSAJE_INICIAL = "Pulse «Firmar un archivo…» para empezar.";
+
+        // Muestra un mensaje en el recuadro de resultado.
+        //   tipo: "correcto", "error" o "" (neutro).
+        function mostrar(tipo, titulo, detalle) {
+            const recuadro = document.getElementById("resultado");
+            recuadro.className = tipo;
+            recuadro.textContent = "";
+
+            const negrita = document.createElement("strong");
+            negrita.textContent = titulo;
+            recuadro.appendChild(negrita);
+
+            // textContent / createTextNode (y no innerHTML) para que un nombre
+            // de archivo con caracteres como < o & se muestre tal cual, sin
+            // que el navegador lo interprete como HTML.
+            if (detalle) {
+                recuadro.appendChild(document.createTextNode(detalle));
+            }
+        }
+
+        // Muestra el motivo de un fallo. Todos los errores de DNIeFirma traen
+        // la explicación en 'message' y el tipo de fallo en 'codigo'.
+        function mostrarError(titulo, error) {
+            if (error.codigo === "cancelado") {
+                // Que el usuario cancele no es un fallo: lo decimos sin alarma.
+                mostrar("", "Operación cancelada.", "");
+            } else {
+                mostrar("error", titulo, error.message);
+            }
+        }
+
+        // Activa o desactiva los botones de firmar y verificar, para que no
+        // se pueda lanzar una operación mientras hay otra en marcha.
+        function activarBotones(activos) {
+            document.getElementById("botonFirmar").disabled = !activos;
+            document.getElementById("botonVerificar").disabled = !activos;
+        }
+
+        // Deja la página como recién abierta, sin el resultado de la última
+        // operación (que incluye el nombre del firmante).
+        function limpiar() {
+            const recuadro = document.getElementById("resultado");
+            recuadro.className = "";
+            recuadro.textContent = MENSAJE_INICIAL;
+        }
+
+        // ====================================================================
+        //  2. Firmar
+        // ====================================================================
+        //  DNIeFirma.firmar() no recibe nada: ni el archivo ni el certificado.
+        //  El programa de firma muestra el diálogo "Abrir" de Windows, busca
+        //  el certificado de firma del DNIe y pide el PIN con su propio
+        //  diálogo. La página solo espera.
+        //
+        //  "await" detiene esta función (no la página) hasta que la promesa
+        //  termina. Si termina bien, devuelve el resultado; si falla, salta
+        //  al "catch" con el error.
+        async function firmar() {
+            activarBotones(false);
+            mostrar("", "Firmando…", "Elija el archivo e introduzca el PIN de su DNIe cuando se le pida.");
+            try {
+                const resultado = await DNIeFirma.firmar();
+
+                // Además de los datos que mostramos, resultado.firma trae
+                // la firma (el contenido del .p7s) en Base64. Este ejemplo
+                // no la usa; en una aplicación real es lo que se enviaría
+                // al servidor (ver la guía, apartado 7).
+                mostrar("correcto", "Archivo firmado correctamente.",
+                    "Firmante: " + resultado.firmante + ". Archivo: " + resultado.archivo +
+                    ". Firma guardada junto a él como " + resultado.archivoFirma + ".");
+            } catch (error) {
+                mostrarError("No se ha podido firmar.", error);
+            }
+            activarBotones(true);
+        }
+
+        // ====================================================================
+        //  3. Verificar
+        // ====================================================================
+        //  DNIeFirma.verificar() pide el archivo y busca su firma junto a él
+        //  (el mismo nombre terminado en .p7s). Si no está ahí, pregunta por
+        //  ella con un segundo diálogo.
+        //
+        //  La promesa termina bien solo si la firma corresponde al archivo y
+        //  el certificado del firmante es de confianza para Windows. En
+        //  cualquier otro caso se rechaza, y el error explica qué ha fallado.
+        //  Para verificar no hacen falta el DNIe ni el PIN.
+        async function verificar() {
+            activarBotones(false);
+            mostrar("", "Verificando…", "Elija el archivo cuya firma quiere comprobar.");
+            try {
+                const resultado = await DNIeFirma.verificar();
+                mostrar("correcto", "La firma es válida.",
+                    "Firmado por: " + resultado.firmante + ". Archivo: " + resultado.archivo + ".");
+            } catch (error) {
+                mostrarError("La verificación ha fallado.", error);
+            }
+            activarBotones(true);
+        }
+
+        // ====================================================================
+        //  4. Adaptar los textos a la versión del DNIe
+        // ====================================================================
+        //  DNIeFirma.version() dice qué DNIe hay ahora mismo en el lector:
+        //  "3.0", "4.0" o "" (ninguno, o una versión no reconocida). No pide
+        //  el PIN ni muestra nada.
+        //
+        //  Con ella hacemos dos cosas:
+        //
+        //    - Decir en la línea de estado qué se ha detectado de verdad: un
+        //      DNIe y su versión, o ninguno.
+        //    - Poner la versión en el título de la página. Mientras no se
+        //      detecte ninguna tarjeta, el título muestra la versión por
+        //      defecto (por eso hace falta la línea de estado: el título
+        //      solo no permite saber si hay tarjeta).
+        //
+        //  Esta llamada es además la primera que hace la página, así que
+        //  sirve de comprobación: si falta la extensión o el programa de
+        //  firma, el error lo dice y se lo mostramos al usuario.
+        const VERSION_POR_DEFECTO = "4.0";
+
+        // Escribe la línea de estado.
+        //   tipo: "detectado", "fallo" o "" (neutro).
+        function mostrarEstado(tipo, texto) {
+            const linea = document.getElementById("estado");
+            linea.className = tipo;
+            linea.textContent = texto;
+        }
+
+        async function actualizarVersion() {
+            try {
+                const detectada = await DNIeFirma.version();
+                if (detectada) {
+                    mostrarEstado("detectado", "DNIe " + detectada + " detectado en el lector.");
+                } else {
+                    mostrarEstado("", "No se detecta ningún DNIe en el lector.");
+                }
+
+                const version = detectada || VERSION_POR_DEFECTO;
+                document.getElementById("titulo").textContent = "Firma electrónica con DNIe " + version;
+                document.title = "Firma con DNIe " + version;
+            } catch (error) {
+                mostrarEstado("fallo", "No se ha podido consultar el lector.");
+                mostrar("error", "La firma con DNIe no está disponible.", error.message);
+            }
+        }
+
+        // ====================================================================
+        //  5. Puesta en marcha
+        // ====================================================================
+        document.getElementById("botonFirmar").addEventListener("click", firmar);
+        document.getElementById("botonVerificar").addEventListener("click", verificar);
+        document.getElementById("botonLimpiar").addEventListener("click", limpiar);
+
+        // Miramos qué DNIe hay al abrir la página y cada vez que el usuario
+        // vuelve a ella desde otra ventana o pestaña (por si mientras tanto
+        // ha insertado o cambiado la tarjeta).
+        actualizarVersion();
+        window.addEventListener("focus", actualizarVersion);
+    </script>
+</body>
+</html>

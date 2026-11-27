@@ -1,0 +1,18 @@
+{
+    "manifest_version": 3,
+    "name": "Firma con DNIe (ejemplo)",
+    "version": "1.0.0",
+    "description": "Permite a las páginas autorizadas firmar archivos con el DNI electrónico mediante un programa instalado en el equipo.",
+    "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqTFepFDLKAFRrTnhXyZkNQ7cEj4l6zuPDx87fYGLDjAhxfqsE1yWrCrQTRCIqumdKdb6CSW1j+mmBElTc3W/5tLjD4z2DhJWapHexPjNrM6fOb3xfWXQDzM50PJS2fsVf7mk97OCJpiIPCEfnvaiH4z38Dwvju0Vjhfet/msQEPNkw43EjnsHyRl2bMDj0YYzRPMqn6msf6n/ja+CKA7VEAyOpKiobDfNRzAJ6OkE2dcrz4zm7Yfx0eaTCoTey2V/Bwx1TtC4PKjg3oxOFhyVEmy4tGYnYxjKaTcILqKnKllU6kmHcspT08k/hJIEM3WAKABXDcD9fmYHtD8JO4ilQIDAQAB",
+    "permissions": ["nativeMessaging"],
+    "background": {
+        "service_worker": "fondo.js"
+    },
+    "content_scripts": [
+        {
+            "matches": ["http://localhost/*"],
+            "js": ["contenido.js"],
+            "run_at": "document_start"
+        }
+    ]
+}

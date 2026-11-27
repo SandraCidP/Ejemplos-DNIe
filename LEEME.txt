@@ -1,0 +1,42 @@
+﻿ENTREGA EJEMPLOS DE CÓDIGO DEL DNIe 1.0 PARA WINDOWS - 27/11/2026
+Equipo DIT Drivers - FNMT-RCM (dit.drivers@fnmt.es)
+
+CONTENIDO
+- ActiveX-Datos-Ciudadano\              Control ActiveX para leer los datos del ciudadano (datos personales, MRZ,
+                                        foto y firma manuscrita) y los certificados del DNIe, y para firmar con él.
+                                        Misma interfaz que el ActiveX publicado en el portal del DNIe.
+                                        Para Internet Explorer 11, Edge en modo Internet Explorer y aplicaciones HTA.
+- ActiveX-Firma-Verificacion\           Control ActiveX para firmar archivos con el DNIe y verificar firmas.
+                                        Para Internet Explorer 11, Edge en modo Internet Explorer y aplicaciones HTA.
+- NativeMessaging-Datos-Ciudadano\      Lectura de los datos del ciudadano y firma, para Chrome, Edge y Firefox
+                                        (programa, extensión del navegador y página de ejemplo).
+- NativeMessaging-Firma-Verificacion\   Firma de archivos y verificación de firmas, para Chrome, Edge y Firefox
+                                        (programa, extensión del navegador y página de ejemplo).
+
+Cada proyecto incluye el código fuente, los binarios compilados y firmados, una página de ejemplo
+y la guía para desarrolladores (carpeta docs, en Markdown y en PDF).
+
+REQUISITOS
+- Windows 10 u 11, un lector de tarjetas y un DNIe 3.0 o 4.0.
+- Ejemplos de lectura de datos: driver PKCS#11 del DNIe para Windows (2.0.0.13 o posterior).
+- Ejemplos de firma y verificación: middleware del DNIe para Windows (Card Module).
+
+NOTAS
+- La puesta en marcha, el uso y la forma de ampliar cada ejemplo se describen en su guía.
+- Licencia MIT (archivo LICENSE de cada proyecto). Los componentes de terceros se indican en AVISOS-TERCEROS.md.
+
+SHA-256
+d1eccc182be21729dc634b13cf1d98110a6575b4b1e1a7dc2888d95c0f992767  ./ActiveX-Datos-Ciudadano/ARM64/Release/ActiveXDNIe_arm64.dll
+62690c02b25e55eb3b02524a183b7a20ec3c238cecb7f4de4a9378650c26fb82  ./ActiveX-Datos-Ciudadano/Win32/Release/ActiveXDNIe_x86.dll
+ec77f438d3fd2238874efee3303c8644e1d1100810b10d8c57175ea4c3c091ba  ./ActiveX-Datos-Ciudadano/docs/Guia-ActiveX-Datos-Ciudadano.pdf
+141486beacadb00f35ca140e0a790b9698e0215d4e37c524d7b5df6cf65a6b43  ./ActiveX-Datos-Ciudadano/x64/Release/ActiveXDNIe_x64.dll
+1b665c0a677d9483c2765414f014a23b08c4dab0198636951d4b7d5e7b19851f  ./ActiveX-Firma-Verificacion/bin/Win32/Release/DNIeActiveX.dll
+6187300cb8b0e549679d8355c8b50f3ed1e544d813ffe20bf33e671c466fff3f  ./ActiveX-Firma-Verificacion/bin/x64/Release/DNIeActiveX.dll
+43cec4f38ca736ea55859feee24da6a6b9ca11886738821acb37494e528b708b  ./ActiveX-Firma-Verificacion/docs/Guia-ActiveX-Firma-Verificacion.pdf
+6a5e3c01e7568b2428ce125c962f8f5a42bbcb32d0cd536959affa10dce4b8ce  ./NativeMessaging-Datos-Ciudadano/bin/ARM64/Release/DNIeDatos.exe
+063f2b42d614ac61e25809b74c15000a7027c3e385b7a8bcc3d439723a1652fd  ./NativeMessaging-Datos-Ciudadano/bin/Win32/Release/DNIeDatos.exe
+1b3a8eba2b400576c35614718ab61bf1d5ca538f8e31c30c6f7197ca22bbe505  ./NativeMessaging-Datos-Ciudadano/bin/x64/Release/DNIeDatos.exe
+66283e525f2db2ac9b6ec9a03985986677d30a917228e7ac2a8806f067aeeabd  ./NativeMessaging-Datos-Ciudadano/docs/Guia-NativeMessaging-Datos-Ciudadano.pdf
+3f528a059eb9db696d2ab4aad24e039365190662a4ac2b1d8fc11bd6d305f1cb  ./NativeMessaging-Firma-Verificacion/bin/ARM64/Release/DNIeAnfitrion.exe
+6b12e4ea65dc05290543571772c569977408c162fc5668981df4b9b2fb8f52b8  ./NativeMessaging-Firma-Verificacion/bin/x64/Release/DNIeAnfitrion.exe
+09f03d046eb238bcf522c257a384b8fe01fe124a77659a96bbfa9b12833bb9fd  ./NativeMessaging-Firma-Verificacion/docs/Guia-NativeMessaging-Firma-Verificacion.pdf

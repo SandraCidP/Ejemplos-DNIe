@@ -1,0 +1,36 @@
+{
+    // ========================================================================
+    //  c_cpp_properties.json - Configuración de IntelliSense (extensión
+    //  "C/C++" de Microsoft). No interviene en la compilación: solo sirve
+    //  para que el editor entienda el código (autocompletado, ir a la
+    //  definición, subrayado de errores).
+    //
+    //  Repite lo esencial de anfitrion\DNIeDatos.vcxproj: la carpeta del
+    //  código (con las cabeceras PKCS#11 en anfitrion\pkcs11), las mismas
+    //  macros y /utf-8 (los .cpp están guardados en UTF-8).
+    //
+    //  No se indica "compilerPath": la extensión localiza por sí misma el
+    //  compilador de Visual Studio o de las Build Tools.
+    // ========================================================================
+    "version": 4,
+    "configurations": [
+        {
+            "name": "x64",
+            "includePath": [
+                "${workspaceFolder}/anfitrion"
+            ],
+            "defines": [
+                "WIN32",
+                "_WINDOWS",
+                "NDEBUG",
+                "_CRT_SECURE_NO_WARNINGS",
+                "UNICODE",
+                "_UNICODE"
+            ],
+            "compilerArgs": ["/utf-8"],
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "windows-msvc-x64"
+        }
+    ]
+}

@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ejemplo DNIe - Native Messaging</title>
+<link rel="icon" href="logoFNMT.ico">
+<!--
+  ================================================================================================
+   Ejemplo de uso del DNIe desde Chrome, Edge y Firefox (Native Messaging), versión 1.0
+  ================================================================================================
+   Las mismas funciones que el ejemplo del ActiveX del DNIe, para los navegadores actuales:
+   información del chip, datos personales, MRZ, foto y firma manuscrita, certificados, claves
+   públicas, firma y verificación de un texto y firma de un archivo.
+
+   QUÉ NECESITA
+     - El driver del DNIe instalado.
+     - El programa DNIeDatos.exe registrado (scripts\registrar.cmd).
+     - La extensión cargada en el navegador (carpeta extension\).
+     - Esta página servida desde http://localhost:8081 (web\servir.cmd), que es el origen
+       autorizado en la extensión. Abierta como archivo (file://) no funciona.
+     - openjpeg.js en esta carpeta, para dibujar la foto y la firma manuscrita (JPEG 2000).
+
+   CÓMO SE USA
+     Todo pasa por dniedatos.js, que crea el objeto DNIeDatos. Cada función devuelve una promesa.
+     La página nunca ve el PIN: lo pide el programa, en una ventana suya. Antes de entregar datos
+     personales, el programa pide permiso al usuario.
+  ================================================================================================
+-->
+<style>
+  body { font-family: "Segoe UI", Tahoma, Arial, sans-serif; font-size: 15px; color: #1f2933;
+         background: #f3f5f7; margin: 0; padding: 24px 16px; }
+  .panel { max-width: 760px; margin: 0 auto; background: #fff; border: 1px solid #d5dbe1;
+           border-radius: 6px; padding: 24px 28px 28px; }
+  .cabecera { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+  .cabecera img { width: 48px; height: 48px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 2px 0 4px; }
+  .subtitulo { color: #5b6773; margin: 0; }
+  .estado { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid #d5dbe1;
+            border-radius: 4px; background: #f8fafb; }
+  .estado .texto { flex: 1; font-weight: 600; }
+  .indicador { width: 10px; height: 10px; border-radius: 5px; background: #aab4be; }
+  .estado.bien .indicador { background: #2e9e55; }
+  .estado.mal .indicador { background: #c0392b; }
+  .pestanas { display: flex; flex-wrap: wrap; gap: 2px; margin: 22px 0 0; padding: 0;
+              border-bottom: 1px solid #d5dbe1; list-style: none; }
+  .pestanas button { border: 1px solid transparent; border-bottom: none; border-radius: 4px 4px 0 0;
+                     background: none; color: #5b6773; padding: 8px 12px; margin-bottom: -1px; }
+  .pestanas button.activa { color: #1f2933; font-weight: 600; background: #fff; border-color: #d5dbe1; }
+  .seccion { display: none; padding-top: 6px; }
+  .seccion.activa { display: block; }
+  label { display: block; font-weight: 600; margin: 16px 0 6px; }
+  textarea, select { width: 100%; box-sizing: border-box; font: inherit; padding: 7px 9px;
+                     border: 1px solid #aab4be; border-radius: 4px; background: #fff; }
+  textarea { height: 76px; font-family: Consolas, "Courier New", monospace; font-size: 12px; }
+  textarea[readonly] { background: #f8fafb; }
+  textarea.mrz { height: 66px; font-size: 14px; letter-spacing: 1px; }
+  .ayuda { color: #5b6773; font-size: 13px; margin: 5px 0 0; }
+  button { font: inherit; padding: 7px 14px; border: 1px solid #aab4be; border-radius: 4px;
+           background: #fff; color: #1f2933; cursor: pointer; }
+  button:hover { background: #eef1f4; }
+  button.principal { background: #1d5fa8; border-color: #1d5fa8; color: #fff; }
+  button.principal:hover { background: #174d89; }
+  button:disabled { opacity: .5; cursor: wait; }
+  .acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  /* table-layout: fixed y overflow-wrap: anywhere hacen que los valores largos sin espacios (claves
+     públicas, resúmenes en hexadecimal) se partan dentro de la celda en vez de salirse del panel. */
+  table.datos { width: 100%; border-collapse: collapse; margin-top: 12px; table-layout: fixed; }
+  table.datos td { padding: 6px 8px; border-bottom: 1px solid #eef1f4; vertical-align: top; overflow-wrap: anywhere; }
+  table.datos td.k { color: #5b6773; width: 40%; }
+  .imagenes { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 14px; }
+  .imagen { text-align: center; color: #5b6773; font-size: 13px; }
+  .imagen canvas { display: block; margin-bottom: 4px; border: 1px solid #d5dbe1; border-radius: 4px;
+                   background: #f8fafb; max-width: 260px; }
+  .resultado { margin: 16px 0 14px; padding: 12px 14px; border-radius: 4px; border: 1px solid #d5dbe1;
+               background: #f3f5f7; overflow-wrap: anywhere; }
+  .resultado.correcto { background: #e6f4ea; border-color: #8fc7a0; color: #14532d; }
+  .resultado.error { background: #fdecea; border-color: #e6a19a; color: #7f1d1d; }
+  .resultado.espera { background: #eef4fb; border-color: #a8c4e6; color: #1d3f6e; }
+  .resultado strong { display: block; margin-bottom: 2px; }
+  .pie { margin-top: 24px; text-align: center; color: #8a96a3; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="panel">
+
+  <div class="cabecera">
+    <img src="logoFNMT.png" alt="">
+    <div>
+      <h1>Ejemplo de uso del DNIe</h1>
+      <p class="subtitulo">Datos del ciudadano y firma con el DNIe 4.0 y el DNIe 3.0, con Native Messaging.</p>
+    </div>
+  </div>
+
+  <div class="estado" id="estado">
+    <span class="indicador"></span><span class="texto" id="textoEstado">Comprobando…</span>
+    <button type="button" onclick="Comprobar()">Comprobar</button>
+  </div>
+
+  <ul class="pestanas" id="pestanas">
+    <li><button type="button" data-p="chip" class="activa">Chip</button></li>
+    <li><button type="button" data-p="datos">Datos personales</button></li>
+    <li><button type="button" data-p="imagenes">Imágenes</button></li>
+    <li><button type="button" data-p="certificados">Certificados</button></li>
+    <li><button type="button" data-p="firma">Firma</button></li>
+    <li><button type="button" data-p="archivo">Firmar archivo</button></li>
+  </ul>
+
+  <!-- Chip -->
+  <div class="seccion activa" id="sec-chip">
+    <div class="resultado" id="resChip">Información del chip y de los programas. No pide permiso ni PIN.</div>
+    <div class="acciones">
+      <button type="button" class="principal" onclick="Ejecutar('resChip', Informacion)">Leer información</button>
+      <button type="button" onclick="Ejecutar('resChip', LeerTodo)">Leer todo (un solo permiso)</button>
+    </div>
+    <table class="datos" id="tablaChip"></table>
+  </div>
+
+  <!-- Datos personales -->
+  <div class="seccion" id="sec-datos">
+    <div class="resultado" id="resDatos">Datos personales y MRZ. El programa pedirá permiso (y el PIN con el DNIe 3.0).</div>
+    <div class="acciones">
+      <button type="button" class="principal" onclick="Ejecutar('resDatos', Datos)">Leer datos personales</button>
+      <button type="button" onclick="Ejecutar('resDatos', Mrz)">Leer MRZ</button>
+    </div>
+    <table class="datos" id="tablaDatos"></table>
+    <label for="mrz">MRZ</label>
+    <textarea id="mrz" class="mrz" readonly></textarea>
+  </div>
+
+  <!-- Imágenes -->
+  <div class="seccion" id="sec-imagenes">
+    <div class="resultado" id="resImagenes">Fotografía y firma manuscrita (JPEG 2000). El programa pedirá permiso.</div>
+    <div class="acciones">
+      <button type="button" class="principal" onclick="Ejecutar('resImagenes', Imagenes)">Leer imágenes</button>
+    </div>
+    <div class="imagenes">
+      <div class="imagen"><canvas id="canvasFoto" width="160" height="200"></canvas>Fotografía</div>
+      <div class="imagen"><canvas id="canvasFirma" width="220" height="90"></canvas>Firma manuscrita</div>
+    </div>
+  </div>
+
+  <!-- Certificados y claves -->
+  <div class="seccion" id="sec-certificados">
+    <div class="resultado" id="resCert">Los certificados incluyen nombre y DNI: el programa pedirá permiso. Las claves públicas no.</div>
+    <div class="acciones">
+      <button type="button" class="principal" onclick="Ejecutar('resCert', Certificados)">Leer certificados</button>
+      <button type="button" onclick="Ejecutar('resCert', Claves)">Leer claves públicas</button>
+    </div>
+    <label for="listaCert">Certificado</label>
+    <select id="listaCert" onchange="MostrarCertificado()"></select>
+    <textarea id="certOut" readonly placeholder="Certificado (Base64 del DER)" style="margin-top: 8px"></textarea>
+    <table class="datos" id="tablaClaves"></table>
+  </div>
+
+  <!-- Firma de un texto -->
+  <div class="seccion" id="sec-firma">
+    <div class="resultado" id="resFirma">El programa enseña el texto, pide confirmación y el PIN.</div>
+    <label for="texto">Texto que se firma</label>
+    <textarea id="texto">Solicito el alta en el servicio.</textarea>
+    <label for="uso">Certificado</label>
+    <select id="uso">
+      <option value="firma">Firma</option>
+      <option value="autenticacion">Autenticación</option>
+    </select>
+    <div class="acciones">
+      <button type="button" class="principal" onclick="Ejecutar('resFirma', Firmar)">Firmar</button>
+      <button type="button" onclick="Ejecutar('resFirma', Verificar)">Verificar la firma</button>
+      <button type="button" onclick="Ejecutar('resFirma', Resumen)">SHA-256 del texto</button>
+    </div>
+    <label for="firmaOut">Firma (Base64)</label>
+    <textarea id="firmaOut"></textarea>
+    <p class="ayuda" id="algoritmo"></p>
+  </div>
+
+  <!-- Firma de un archivo -->
+  <div class="seccion" id="sec-archivo">
+    <div class="resultado" id="resArchivo">El archivo se elige en una ventana de Windows; la página solo recibe su nombre y la firma.</div>
+    <div class="acciones">
+      <button type="button" class="principal" onclick="Ejecutar('resArchivo', FirmarArchivo)">Elegir y firmar un archivo</button>
+    </div>
+    <table class="datos" id="tablaArchivo"></table>
+    <label for="firmaArchivoOut">Firma (Base64)</label>
+    <textarea id="firmaArchivoOut" readonly></textarea>
+    <p class="ayuda">Es una firma «en bruto» del SHA-256 del archivo (ECDSA r||s con el DNIe 4.0, PKCS#1 v1.5 con el DNIe 3.0),
+      no un formato de firma de documentos (CAdES, PAdES o XAdES). Para firmar documentos con esos formatos, use AutoFirma.</p>
+  </div>
+
+  <p class="pie">FNMT-RCM · Ejemplo de uso del DNIe con Native Messaging 1.0</p>
+</div>
+
+<script src="openjpeg.js"></script>
+<script src="dniedatos.js"></script>
+<script>
+"use strict";
+
+// ==================================================================================================
+//  Utilidades de la página
+// ==================================================================================================
+
+const $ = (id) => document.getElementById(id);
+
+// Muestra el resultado de una operación en el recuadro de su pestaña.
+function Mostrar(id, clase, titulo, detalle) {
+  const caja = $(id);
+  caja.className = "resultado " + clase;
+  caja.innerHTML = "";
+  const t = document.createElement("strong");
+  t.textContent = titulo;
+  caja.appendChild(t);
+  if (detalle) caja.appendChild(document.createTextNode(detalle));
+}
+
+// Rellena una tabla de dos columnas con [etiqueta, valor].
+function Tabla(id, filas) {
+  const tabla = $(id);
+  tabla.innerHTML = "";
+  for (const [k, v] of filas) {
+    const tr = tabla.insertRow();
+    const a = tr.insertCell(); a.className = "k"; a.textContent = k;
+    tr.insertCell().textContent = v || "";
+  }
+}
+
+// Ejecuta una operación: aviso de espera, botones desactivados y el error, si lo hay, en su recuadro.
+// Una cancelación del usuario no se muestra como error.
+let ocupado = false;
+async function Ejecutar(idRes, funcion) {
+  if (ocupado) return;
+  ocupado = true;
+  document.querySelectorAll(".acciones button").forEach(b => b.disabled = true);
+  Mostrar(idRes, "espera", "Operación en curso…", "Atienda las ventanas del DNIe si aparecen.");
+  try {
+    await funcion(idRes);
+  } catch (e) {
+    if (e.codigo === "cancelado") Mostrar(idRes, "", "Operación cancelada.", e.message);
+    else Mostrar(idRes, "error", "No se ha podido completar", e.message + (e.pkcs11 ? " (" + e.pkcs11 + ")" : ""));
+  } finally {
+    ocupado = false;
+    document.querySelectorAll(".acciones button").forEach(b => b.disabled = false);
+  }
+}
+
+// ==================================================================================================
+//  Cambio de DNIe
+// ==================================================================================================
+//  Cada respuesta con tarjeta trae su número de serie. Si cambia, se borra de la pantalla todo lo
+//  del DNIe anterior, para no mezclar datos de dos personas.
+let serieActual = "";
+function RevisarSerie(serie) {
+  if (serie === undefined || serie === serieActual) return;
+  if (serieActual) BorrarPantalla();
+  serieActual = serie;
+}
+
+function BorrarPantalla() {
+  ["tablaChip", "tablaDatos", "tablaClaves", "tablaArchivo"].forEach(id => $(id).innerHTML = "");
+  ["mrz", "certOut", "firmaOut", "firmaArchivoOut"].forEach(id => $(id).value = "");
+  $("listaCert").innerHTML = "";
+  $("algoritmo").textContent = "";
+  ["canvasFoto", "canvasFirma"].forEach(id => { const c = $(id); c.getContext("2d").clearRect(0, 0, c.width, c.height); });
+  certificados = [];
+  ultimaFirma = null;
+}
+
+// ==================================================================================================
+//  Estado: extensión, programa y tarjeta
+// ==================================================================================================
+async function Comprobar() {
+  const caja = $("estado");
+  caja.className = "estado";
+  if (!DNIeDatos.extensionDisponible()) {
+    caja.className = "estado mal";
+    $("textoEstado").textContent = "No se detecta la extensión. Cárguela en el navegador y recargue la página.";
+    return;
+  }
+  try {
+    const r = await DNIeDatos.version();
+    RevisarSerie(r.serie);
+    caja.className = r.version ? "estado bien" : "estado";
+    $("textoEstado").textContent = r.version ? "DNIe " + r.version + " en el lector." : "Inserte el DNIe en el lector.";
+  } catch (e) {
+    caja.className = "estado mal";
+    $("textoEstado").textContent = e.message;
+  }
+}
+
+// ==================================================================================================
+//  Chip
+// ==================================================================================================
+async function Informacion(idRes) {
+  const r = await DNIeDatos.informacion();
+  RevisarSerie(r.serie);
+  const filas = [
+    ["Versión del DNIe", r.version || "(sin DNIe en el lector)"],
+    ["Número de serie del chip", r.serie],
+    ["Tipo de documento", r.tipo],
+    ["Hardware / firmware", r.hardware ? r.hardware + " / " + r.firmware : ""]
+  ];
+  for (const p of r.programas) filas.push([p.nombre, p.version || "(no instalado)"]);
+  Tabla("tablaChip", filas);
+  Mostrar(idRes, "correcto", "Información leída.");
+}
+
+// Todo con un solo permiso: leer() con varias cosas a la vez.
+async function LeerTodo(idRes) {
+  const r = await DNIeDatos.leer(["datos", "mrz", "imagenes", "certificados"]);
+  RevisarSerie(r.serie);
+  PintarDatos(r);
+  $("mrz").value = Mrz3Lineas(r.mrz);
+  PintarImagenes(r.imagenes);
+  RellenarCertificados(r.certificados);
+  Mostrar(idRes, "correcto", "Leído todo.", "Vea las pestañas Datos personales, Imágenes y Certificados.");
+}
+
+// ==================================================================================================
+//  Datos personales y MRZ
+// ==================================================================================================
+function PintarDatos(r) {
+  const d = r.datos;
+  Tabla("tablaDatos", [
+    ["Nombre", d.nombre], ["Primer apellido", d.apellido1], ["Segundo apellido", d.apellido2],
+    ["Número de DNI", d.numero], ["Sexo", d.sexo], ["Nacionalidad", d.nacionalidad],
+    ["Fecha de nacimiento", d.fechaNacimiento], ["Lugar de nacimiento", [d.localidadNacimiento, d.provinciaNacimiento].filter(Boolean).join(", ")],
+    ["Padres", d.padres], ["Domicilio", d.domicilio],
+    ["Localidad y provincia", [d.localidadDomicilio, d.provinciaDomicilio].filter(Boolean).join(", ")],
+    ["Válido hasta", d.fechaCaducidad], ["Número de soporte", d.soporte]
+  ]);
+}
+
+async function Datos(idRes) {
+  const r = await DNIeDatos.datos();
+  RevisarSerie(r.serie);
+  PintarDatos(r);
+  Mostrar(idRes, "correcto", "Datos personales leídos.");
+}
+
+// La MRZ del DNIe son 3 líneas de 30 caracteres.
+function Mrz3Lineas(m) {
+  return (m || "").match(/.{1,30}/g)?.join("\n") || "";
+}
+
+async function Mrz(idRes) {
+  const r = await DNIeDatos.mrz();
+  RevisarSerie(r.serie);
+  $("mrz").value = Mrz3Lineas(r.mrz);
+  Mostrar(idRes, "correcto", "MRZ leída.");
+}
+
+// ==================================================================================================
+//  Imágenes (JPEG 2000, con openjpeg.js)
+// ==================================================================================================
+function Pintar(idCanvas, base64, formato) {
+  const bytes = DNIeDatos.base64ABytes(base64);
+  const canvas = $(idCanvas);
+  if (formato === "jpg") {                       // JPEG: lo dibuja el navegador
+    const img = new Image();
+    img.onload = () => { canvas.width = img.width; canvas.height = img.height; canvas.getContext("2d").drawImage(img, 0, 0); };
+    img.src = "data:image/jpeg;base64," + base64;
+    return;
+  }
+  const img = openjpeg(bytes, formato === "j2k" ? "j2k" : "jp2");
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext("2d");
+  const rgba = ctx.createImageData(img.width, img.height);
+  const n = img.width * img.height, gris = img.data.length < 3 * n;
+  for (let i = 0, j = 0; j < n; i += 4, j++) {
+    rgba.data[i]     = img.data[j];
+    rgba.data[i + 1] = gris ? img.data[j] : img.data[j + n];
+    rgba.data[i + 2] = gris ? img.data[j] : img.data[j + 2 * n];
+    rgba.data[i + 3] = 255;
+  }
+  ctx.putImageData(rgba, 0, 0);
+}
+
+function PintarImagenes(im) {
+  if (typeof openjpeg !== "function") throw new Error("Imágenes leídas, pero falta openjpeg.js para dibujarlas.");
+  Pintar("canvasFoto", im.foto, im.formatoFoto);
+  Pintar("canvasFirma", im.firma, im.formatoFirma);
+}
+
+async function Imagenes(idRes) {
+  const r = await DNIeDatos.imagenes();
+  RevisarSerie(r.serie);
+  PintarImagenes(r.imagenes);
+  Mostrar(idRes, "correcto", "Imágenes leídas.");
+}
+
+// ==================================================================================================
+//  Certificados y claves públicas
+// ==================================================================================================
+let certificados = [];
+function RellenarCertificados(lista) {
+  certificados = lista;
+  const sel = $("listaCert");
+  sel.innerHTML = "";
+  for (const c of lista) sel.add(new Option(c.etiqueta));
+  MostrarCertificado();
+}
+
+function MostrarCertificado() {
+  const c = certificados[$("listaCert").selectedIndex];
+  $("certOut").value = c ? c.certificado : "";
+}
+
+async function Certificados(idRes) {
+  const r = await DNIeDatos.certificados();
+  RevisarSerie(r.serie);
+  RellenarCertificados(r.certificados);
+  Mostrar(idRes, "correcto", r.certificados.length + " certificados.");
+}
+
+async function Claves(idRes) {
+  const r = await DNIeDatos.claves();
+  RevisarSerie(r.serie);
+  const filas = [];
+  for (const k of r.claves) {
+    const uso = k.uso === "firma" ? "Firma" : "Autenticación";
+    if (k.tipo === "EC") filas.push([uso + " (EC, punto público)", DNIeDatos.hex(k.punto)]);
+    else filas.push([uso + " (RSA, módulo)", DNIeDatos.hex(k.modulo)], [uso + " (RSA, exponente)", DNIeDatos.hex(k.exponente)]);
+  }
+  Tabla("tablaClaves", filas);
+  Mostrar(idRes, "correcto", r.claves.length + " claves públicas.");
+}
+
+// ==================================================================================================
+//  Firma y verificación de un texto
+// ==================================================================================================
+let ultimaFirma = null;
+async function Firmar(idRes) {
+  const r = await DNIeDatos.firmar({ texto: $("texto").value, uso: $("uso").value });
+  ultimaFirma = r;
+  $("firmaOut").value = r.firma;
+  $("algoritmo").textContent = "Algoritmo: " + r.algoritmo + ". SHA-256: " + DNIeDatos.hex(r.hash) + ".";
+  Mostrar(idRes, "correcto", "Texto firmado.", "La respuesta trae también el certificado del firmante, para verificar la firma en el servidor.");
+}
+
+async function Verificar(idRes) {
+  if (!$("firmaOut").value) throw new Error("Firme primero, o pegue una firma en Base64.");
+  const r = await DNIeDatos.verificar({ texto: $("texto").value, firma: $("firmaOut").value.trim(), uso: $("uso").value });
+  if (r.valida) Mostrar(idRes, "correcto", "La firma es válida.", "Corresponde a este texto y al certificado elegido del DNIe.");
+  else Mostrar(idRes, "error", "La firma NO es válida.", "El texto ha cambiado, la firma no es de este DNIe o no es del certificado elegido.");
+}
+
+async function Resumen(idRes) {
+  const r = await DNIeDatos.hash($("texto").value);
+  Mostrar(idRes, "correcto", "SHA-256 del texto", DNIeDatos.hex(r.hash));
+}
+
+// ==================================================================================================
+//  Firma de un archivo
+// ==================================================================================================
+async function FirmarArchivo(idRes) {
+  const r = await DNIeDatos.firmarArchivo({ uso: "firma" });
+  Tabla("tablaArchivo", [
+    ["Archivo", r.archivo], ["Tamaño", r.tamano.toLocaleString("es-ES") + " bytes"],
+    ["SHA-256", DNIeDatos.hex(r.hash)], ["Algoritmo", r.algoritmo]
+  ]);
+  $("firmaArchivoOut").value = r.firma;
+  Mostrar(idRes, "correcto", "Archivo firmado.");
+}
+
+// ==================================================================================================
+//  Arranque
+// ==================================================================================================
+document.querySelectorAll("#pestanas button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("#pestanas button").forEach(x => x.classList.toggle("activa", x === b));
+  document.querySelectorAll(".seccion").forEach(s => s.classList.toggle("activa", s.id === "sec-" + b.dataset.p));
+}));
+Comprobar();
+</script>
+</body>
+</html>

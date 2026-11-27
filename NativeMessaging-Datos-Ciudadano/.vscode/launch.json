@@ -1,0 +1,35 @@
+{
+    // ========================================================================
+    //  launch.json - Depuración desde Visual Studio Code.
+    //
+    //  DNIeDatos.exe no se arranca a mano: lo arranca el navegador en cada
+    //  petición y termina al responder. Para depurarlo hay que "adjuntarse"
+    //  al proceso mientras está vivo, y el momento cómodo es cuando muestra
+    //  una ventana (permiso, PIN o "Abrir"):
+    //
+    //    1. Ponga los puntos de interrupción (por ejemplo, en
+    //       anfitrion\Operaciones.cpp, después de la ventana).
+    //    2. En la página de ejemplo, lance una operación con ventana.
+    //    3. Con la ventana abierta, pulse F5 aquí y elija DNIeDatos.exe en la
+    //       lista de procesos.
+    //    4. Conteste a la ventana: el programa se detendrá en el punto.
+    //
+    //  Para probar sin navegador está la tarea "Probar el programa sin
+    //  navegador" (scripts\probar.ps1).
+    //
+    //  El .exe registrado es el de Release, que está optimizado: al avanzar
+    //  paso a paso el depurador puede saltarse líneas o no mostrar alguna
+    //  variable. Los símbolos (.pdb) se generan junto al .exe.
+    //
+    //  Necesita la extensión "C/C++" de Microsoft (depurador "cppvsdbg").
+    // ========================================================================
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Adjuntar a DNIeDatos.exe",
+            "type": "cppvsdbg",
+            "request": "attach",
+            "processId": "${command:pickProcess}"
+        }
+    ]
+}

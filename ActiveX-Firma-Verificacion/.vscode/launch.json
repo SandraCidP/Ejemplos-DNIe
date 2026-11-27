@@ -1,0 +1,35 @@
+{
+    // ========================================================================
+    //  launch.json - Depuración desde Visual Studio Code (tecla F5).
+    //
+    //  Una DLL no se ejecuta sola: hay que arrancar el programa que la carga.
+    //  Aquí es mshta.exe de 32 bits con la página de ejemplo, lo mismo que
+    //  hace web\abrir.cmd. Al crear la página el control, Windows carga
+    //  bin\Win32\Release\DNIeActiveX.dll y se detiene en los puntos de
+    //  interrupción que haya puestos en el código.
+    //
+    //  Antes hay que haber compilado y registrado el control (tareas
+    //  "Compilar" y "Registrar el control").
+    //
+    //  Necesita la extensión "C/C++" de Microsoft (depurador "cppvsdbg").
+    //
+    //  La DLL registrada es la de Release, que está optimizada: al avanzar
+    //  paso a paso el depurador puede saltarse líneas o no mostrar alguna
+    //  variable. Los símbolos (.pdb) se generan junto a la DLL.
+    //
+    //  En un Windows de 32 bits no existe SysWOW64: cambie la ruta de
+    //  "program" por ${env:SystemRoot}\\System32\\mshta.exe.
+    // ========================================================================
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Depurar el control en la HTA (32 bits)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${env:SystemRoot}\\SysWOW64\\mshta.exe",
+            "args": ["${workspaceFolder}\\web\\DNIeFirma.hta"],
+            "cwd": "${workspaceFolder}\\web",
+            "console": "internalConsole"
+        }
+    ]
+}

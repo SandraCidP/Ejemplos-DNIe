@@ -1,0 +1,11 @@
+HKCR
+{
+	NoRemove AppID
+	{
+		'%APPID%' = s 'ActiveXDNIe'
+		'ActiveXDNIe.dll'
+		{
+			val AppID = s '%APPID%'
+		}
+	}
+}

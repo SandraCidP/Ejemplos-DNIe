@@ -1,0 +1,42 @@
+{
+    // ========================================================================
+    //  c_cpp_properties.json - Configuración de IntelliSense (extensión
+    //  "C/C++" de Microsoft). No interviene en la compilación: solo sirve
+    //  para que el editor entienda el código (autocompletado, ir a la
+    //  definición, subrayado de errores).
+    //
+    //  Repite lo esencial de ActiveXDNIe.vcxproj:
+    //    - includePath: la carpeta del proyecto, x64\Release (donde MIDL deja
+    //      la cabecera generada ActiveXDNIe_i.h, que NO existe hasta haber
+    //      compilado una vez). Las cabeceras PKCS#11 están en pkcs11\, dentro
+    //      de la carpeta del proyecto.
+    //    - defines: las mismas macros con las que compila el proyecto.
+    //    - /utf-8: los .cpp están guardados en UTF-8.
+    //
+    //  No se indica "compilerPath": la extensión localiza por sí misma el
+    //  compilador de Visual Studio o de las Build Tools.
+    // ========================================================================
+    "version": 4,
+    "configurations": [
+        {
+            "name": "x64",
+            "includePath": [
+                "${workspaceFolder}",
+                "${workspaceFolder}/x64/Release"
+            ],
+            "defines": [
+                "WIN32",
+                "_WINDOWS",
+                "_USRDLL",
+                "NDEBUG",
+                "_CRT_SECURE_NO_WARNINGS",
+                "UNICODE",
+                "_UNICODE"
+            ],
+            "compilerArgs": ["/utf-8"],
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "windows-msvc-x64"
+        }
+    ]
+}

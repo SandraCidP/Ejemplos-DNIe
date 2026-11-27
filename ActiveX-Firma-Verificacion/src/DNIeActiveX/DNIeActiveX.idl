@@ -1,0 +1,161 @@
+// ============================================================================
+//  DNIeActiveX.idl  -  Definición de la interfaz COM del control
+// ============================================================================
+//
+//  QUÉ ES ESTE ARCHIVO
+//  -------------------
+//  IDL (Interface Definition Language) es el lenguaje con el que se describe
+//  "el contrato" de un componente COM: qué métodos y propiedades ofrece, con
+//  qué parámetros y con qué identificadores (GUID).
+//
+//  El compilador MIDL lee este archivo y genera, entre otros, estos tres
+//  archivos que usamos (los deja en la carpeta obj\, no junto al código):
+//    - DNIeActiveX_h.h   Cabecera C++ con la interfaz IDNIeSigner.
+//    - DNIeActiveX_i.c   Los GUID como constantes C (IID_..., CLSID_...).
+//    - DNIeActiveX.tlb   La "biblioteca de tipos": la misma descripción pero
+//                        en binario. Se incrusta dentro de la DLL y es lo que
+//                        permite que JavaScript/VBScript llamen a los métodos
+//                        por su nombre (ver Signer.cpp, método Invoke).
+//  (También genera DNIeActiveX_p.c y dlldata.c, código "proxy/stub" que este
+//  proyecto no necesita ni compila.)
+//
+//  CÓMO AMPLIAR EL CONTROL CON UN MÉTODO NUEVO
+//  -------------------------------------------
+//    1. Declararlo aquí, dentro de IDNIeSigner, con un id(N) que no se repita.
+//    2. Declararlo en Signer.h e implementarlo en Signer.cpp.
+//    3. Recompilar. No hay que tocar nada más: Invoke() lo encuentra solo
+//       gracias a la biblioteca de tipos.
+//
+//  IMPORTANTE: los GUID identifican al componente en todo el sistema. En este
+//  archivo hay TRES: el de la interfaz, el de la biblioteca y el de la clase.
+//  Si se copia este proyecto para crear OTRO control distinto, hay que
+//  generar los tres de nuevo (en PowerShell: [guid]::NewGuid()) y cambiar
+//  también el ProgID (constante PROG_ID de DllMain.cpp), para no chocar con
+//  este.
+//
+//  (Los textos "helpstring" van sin acentos a propósito: se guardan dentro de
+//  la biblioteca de tipos y así se evitan problemas de codificación.)
+// ============================================================================
+
+import "oaidl.idl";
+import "ocidl.idl";
+
+// ----------------------------------------------------------------------------
+//  Interfaz IDNIeSigner
+// ----------------------------------------------------------------------------
+//  - "dual": se puede usar de dos formas: llamando directamente a los métodos
+//    (C++, VB6 con enlace temprano) o a través de IDispatch, por nombre
+//    (JavaScript, VBScript). Los lenguajes de script solo conocen IDispatch.
+//  - "oleautomation": solo usa tipos compatibles con Automatización (BSTR,
+//    VARIANT_BOOL...), que son los únicos que entienden los lenguajes de script.
+//  - Todos los métodos devuelven HRESULT (éxito/error de COM). El valor que
+//    "ve" el script es el parámetro marcado como [out, retval].
+//  - "object": es una interfaz COM (y no de otra tecnología que también usa
+//    IDL). "uuid(...)": su identificador único (IID).
+//  - "nonextensible": el objeto no tendrá más miembros que los declarados
+//    aquí; no se le pueden añadir en tiempo de ejecución.
+//  - "pointer_default(unique)": convención para los punteros de los
+//    parámetros (pueden ser nulos). Es el valor habitual; no hay que tocarlo.
+// ----------------------------------------------------------------------------
+[
+    object,
+    uuid(C45F032E-FA11-4B1B-ABF3-3F4FBF1D4E8E),
+    dual,
+    nonextensible,
+    oleautomation,
+    pointer_default(unique),
+    helpstring("Firma y verificacion de archivos con DNIe")
+]
+interface IDNIeSigner : IDispatch
+{
+    // Muestra el cuadro de diálogo "Abrir" de Windows y devuelve la ruta
+    // completa del archivo elegido (cadena vacía si el usuario cancela).
+    // Existe porque el navegador, por seguridad, NO da a JavaScript la ruta
+    // real de un <input type="file">.
+    [id(1), helpstring("Muestra el dialogo Abrir y devuelve la ruta elegida")]
+    HRESULT SelectFile([in] BSTR title, [out, retval] BSTR* path);
+
+    // Firma 'inputPath' con el DNIe y guarda la firma (PKCS#7/CMS separada)
+    // en 'signaturePath'. Si 'signaturePath' es "", usa inputPath + ".p7s".
+    // Si ese archivo ya existe, lo sobrescribe.
+    // Pide el PIN del DNIe con un cuadro de diálogo propio.
+    // Devuelve True si la firma se ha generado; si no, consultar LastError.
+    [id(2), helpstring("Firma un archivo y guarda la firma PKCS#7 separada")]
+    HRESULT SignFile([in] BSTR inputPath, [in] BSTR signaturePath,
+                     [out, retval] VARIANT_BOOL* ok);
+
+    // Comprueba que 'signaturePath' es una firma válida de 'inputPath'.
+    // Si 'signaturePath' es "", usa inputPath + ".p7s".
+    // Devuelve True si la firma es válida; si no, consultar LastError.
+    [id(3), helpstring("Verifica la firma PKCS#7 separada de un archivo")]
+    HRESULT VerifyFile([in] BSTR inputPath, [in] BSTR signaturePath,
+                       [out, retval] VARIANT_BOOL* valid);
+
+    // Texto (en español) que explica por qué falló la última llamada a
+    // SignFile o VerifyFile. Cadena vacía si fue correcta. (SelectFile no
+    // modifica esta propiedad.)
+    [propget, id(4), helpstring("Descripcion del ultimo error")]
+    HRESULT LastError([out, retval] BSTR* message);
+
+    // Nombre del titular del certificado usado en la última firma, o del
+    // firmante encontrado en la última verificación. Puede tener valor
+    // aunque la operación fallara (p. ej. una firma correcta cuyo
+    // certificado no es de confianza): sirve para decir de quién era.
+    [propget, id(5), helpstring("Nombre del firmante de la ultima operacion")]
+    HRESULT SignerName([out, retval] BSTR* name);
+
+    // (Opcional) Huella digital SHA-1, en hexadecimal, del certificado con el
+    // que se quiere firmar. Si se deja vacía, el control localiza
+    // automáticamente el certificado de FIRMA del DNIe. Útil para pruebas
+    // automáticas o para aplicaciones que ya saben qué certificado quieren
+    // usar.
+    [propget, id(6), helpstring("Huella SHA-1 del certificado a usar (opcional)")]
+    HRESULT CertificateThumbprint([out, retval] BSTR* thumbprint);
+    [propput, id(6)]
+    HRESULT CertificateThumbprint([in] BSTR thumbprint);
+
+    // Si es True (valor por defecto), VerifyFile exige además que el
+    // certificado del firmante encadene con una autoridad raíz de confianza
+    // de Windows. Si es False, solo se comprueba la firma matemáticamente.
+    [propget, id(7), helpstring("Exigir certificado de confianza al verificar")]
+    HRESULT CheckCertificateTrust([out, retval] VARIANT_BOOL* check);
+    [propput, id(7)]
+    HRESULT CheckCertificateTrust([in] VARIANT_BOOL check);
+
+    // Versión del DNIe que hay ahora mismo en el lector: "3.0" o "4.0".
+    // Cadena vacía si no hay ningún DNIe insertado o si su versión no se
+    // reconoce. Se consulta el lector cada vez que se lee la propiedad, y no
+    // hace falta el PIN. Sirve para que la página adapte sus textos a la
+    // tarjeta del usuario (ver web\index.html).
+    [propget, id(8), helpstring("Version del DNIe insertado: 3.0, 4.0 o vacio")]
+    HRESULT DnieVersion([out, retval] BSTR* version);
+};
+
+// ----------------------------------------------------------------------------
+//  Biblioteca de tipos y clase COM
+// ----------------------------------------------------------------------------
+//  La "coclass" es la clase que se puede crear desde fuera. Su GUID (CLSID)
+//  es el que se registra en Windows, asociado al nombre "DNIeActiveX.Signer"
+//  (el ProgID, que no sale de este archivo: se elige en DllMain.cpp,
+//  constante PROG_ID), que es el que usa la página web:
+//
+//      var firmador = new ActiveXObject("DNIeActiveX.Signer");
+// ----------------------------------------------------------------------------
+[
+    uuid(8BC5C640-127A-4E6A-A1C7-1F032A3377B9),
+    version(1.0),
+    helpstring("DNIeActiveX 1.0 - Firma con DNIe")
+]
+library DNIeActiveXLib
+{
+    importlib("stdole2.tlb");
+
+    [
+        uuid(9742DA5B-FDBC-4E1A-AB8B-C714414315BA),
+        helpstring("Firmador con DNIe")
+    ]
+    coclass DNIeSigner
+    {
+        [default] interface IDNIeSigner;
+    };
+};

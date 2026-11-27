@@ -1,0 +1,27 @@
+HKCR
+{
+	FNMT.ActiveXDNIe.1 = s 'ActiveX DNIe (FNMT-RCM)'
+	{
+		CLSID = s '{4BE64113-3A60-46FD-BA96-5BA52094E063}'
+	}
+	FNMT.ActiveXDNIe = s 'ActiveX DNIe (FNMT-RCM)'
+	{
+		CLSID = s '{4BE64113-3A60-46FD-BA96-5BA52094E063}'
+		CurVer = s 'FNMT.ActiveXDNIe.1'
+	}
+	NoRemove CLSID
+	{
+		ForceRemove {4BE64113-3A60-46FD-BA96-5BA52094E063} = s 'ActiveX DNIe (FNMT-RCM)'
+		{
+			ProgID = s 'FNMT.ActiveXDNIe.1'
+			VersionIndependentProgID = s 'FNMT.ActiveXDNIe'
+			ForceRemove Programmable
+			InprocServer32 = s '%MODULE%'
+			{
+				val ThreadingModel = s 'Apartment'
+			}
+			TypeLib = s '{AF69F876-556E-401C-8184-198CA09BBC9C}'
+			Version = s '1.0'
+		}
+	}
+}

@@ -1,0 +1,125 @@
+// ActiveXDNIe.idl
+// ActiveX del DNIe (DNIe 3.0 y DNIe 4.0) sobre el código actual del driver PKCS#11 de la FNMT-RCM.
+//
+// La interfaz IDLL_ADMIN reproduce EXACTAMENTE la del ActiveX publicado en dnielectronico.es
+// (ActiveXDNIe.dll 1.0.0.2): mismos nombres, mismos DISPID y mismas firmas, para que las páginas
+// existentes funcionen sin cambios. Los GUID y el ProgID son propios, distintos de los del publicado,
+// para que los dos puedan estar instalados a la vez.
+//
+//   Publicado (referencia):  LIBID 77991B83-A3F4-4D9A-A72A-12F9DE309D2B
+//                            IID   C4A68867-94EC-4A9A-8429-C243AF4CC9C5
+//                            CLSID 0A39EB06-E3DB-49B6-8C8D-D2EEE5335B20
+//                            ProgID DLL_ADMINISTRATIVA_DNIE.DLL_ADMIN
+
+import "oaidl.idl";
+import "ocidl.idl";
+
+[
+	object,
+	uuid(804D63DC-863F-4F5C-992D-DD65C0B846E1),
+	dual,
+	nonextensible,
+	helpstring("IDLL_ADMIN Interface"),
+	pointer_default(unique)
+]
+interface IDLL_ADMIN : IDispatch
+{
+		[id(1), helpstring("method InicializarConexion")] HRESULT InicializarConexion();
+		[id(2), helpstring("method FinalizarConexion")] HRESULT FinalizarConexion();
+		[id(59), helpstring("method ObtenerNumeroSerie")] HRESULT ObtenerNumeroSerie();
+		[propget, id(60), helpstring("property NumeroSerieOut")] HRESULT NumeroSerieOut([out, retval] BSTR* pVal);
+		[propget, id(61), helpstring("property ulNumeroSerieLen")] HRESULT ulNumeroSerieLen([out, retval] unsigned long* pVal);
+		[propget, id(62), helpstring("property lastresultOut")] HRESULT lastresultOut([out, retval] int* pVal);
+		[propput, id(72), helpstring("property EtiquetaKeyPrivIn")] HRESULT EtiquetaKeyPrivIn([in] BSTR newVal);
+		[propget, id(73), helpstring("property DatosOut")] HRESULT DatosOut([out, retval] BSTR* pVal);
+		[propput, id(74), helpstring("property DatosIn")] HRESULT DatosIn([in] BSTR newVal);
+		[propput, id(76), helpstring("property EtiquetaDatoIn")] HRESULT EtiquetaDatoIn([in] BSTR newVal);
+		[id(81), helpstring("method ObtenerDatoPrivado")] HRESULT ObtenerDatoPrivado();
+		[id(82), helpstring("method ObtenerDatoPublico")] HRESULT ObtenerDatoPublico();
+		[propget, id(83), helpstring("property FirmaOut")] HRESULT FirmaOut([out, retval] BSTR* pVal);
+		[id(84), helpstring("method Firmar")] HRESULT Firmar();
+		[propput, id(95), helpstring("property EtiquetaCertificadoIn")] HRESULT EtiquetaCertificadoIn([in] BSTR newVal);
+		[id(96), helpstring("method ObtenerCertificado")] HRESULT ObtenerCertificado();
+		[propput, id(98), helpstring("property paddingTypeIn")] HRESULT paddingTypeIn([in] BYTE newVal);
+		[id(99), helpstring("method pkcs1Padding")] HRESULT pkcs1Padding();
+		[id(100), helpstring("method pkcs1Unpadding")] HRESULT pkcs1Unpadding();
+		[id(101), helpstring("method Verificar")] HRESULT Verificar();
+		[propput, id(103), helpstring("property ModuloIn")] HRESULT ModuloIn([in] BSTR newVal);
+		[propget, id(104), helpstring("property ModuloOut")] HRESULT ModuloOut([out, retval] BSTR* pVal);
+		[propput, id(105), helpstring("property ExponenteIn")] HRESULT ExponenteIn([in] BSTR newVal);
+		[propget, id(106), helpstring("property ExponenteOut")] HRESULT ExponenteOut([out, retval] BSTR* pVal);
+		[id(108), helpstring("method ObtenerClavePublicaRSA")] HRESULT ObtenerClavePublicaRSA();
+		[propget, id(124), helpstring("property ArrayEtiquetasLenOut")] HRESULT ArrayEtiquetasLenOut([out, retval] int* pVal);
+		[propget, id(125), helpstring("property EtiquetaOut")] HRESULT EtiquetaOut([in] int i, [out, retval] BSTR* pVal);
+		[id(127), helpstring("method ObtenerEtiquetasDatosPublicos")] HRESULT ObtenerEtiquetasDatosPublicos();
+		[id(128), helpstring("method ObtenerEtiquetasDatosPrivados")] HRESULT ObtenerEtiquetasDatosPrivados();
+		[id(130), helpstring("method ObtenerEtiquetasClavesPrivadas")] HRESULT ObtenerEtiquetasClavesPrivadas();
+		[id(131), helpstring("method ObtenerEtiquetasClavesPublicas")] HRESULT ObtenerEtiquetasClavesPublicas();
+		[id(134), helpstring("method ObtenerEtiquetasTodosCertificados")] HRESULT ObtenerEtiquetasTodosCertificados();
+		[id(135), helpstring("method Hash_Init")] HRESULT Hash_Init();
+		[propget, id(136), helpstring("property hashOut")] HRESULT hashOut([out, retval] BSTR* pVal);
+		[id(137), helpstring("method Hash")] HRESULT Hash();
+		[id(138), helpstring("method Hash_Final")] HRESULT Hash_Final();
+		[id(139), helpstring("method Hash_Update")] HRESULT Hash_Update();
+		[id(151), helpstring("method ObtenerInfoBiometrica")] HRESULT ObtenerInfoBiometrica();
+		[propput, id(152), helpstring("property FirmaIn")] HRESULT FirmaIn([in] BSTR newVal);
+		[propput, id(169), helpstring("property BITIn")] HRESULT BITIn([in] BSTR newVal);
+		[id(170), helpstring("method ObtenerNumeroSerie_Soporte")] HRESULT ObtenerNumeroSerie_Soporte();
+		[id(171), helpstring("method PresentarPin")] HRESULT PresentarPin();
+		[propput, id(172), helpstring("property PinIn")] HRESULT PinIn([in] BSTR newVal);
+		[propput, id(175), helpstring("property EtiquetaKeyPubIn")] HRESULT EtiquetaKeyPubIn([in] BSTR newVal);
+		[id(176), helpstring("method ObtenerClavePublicaRSAFirmada")] HRESULT ObtenerClavePublicaRSAFirmada();
+		[propget, id(179), helpstring("property CertComponenteOut")] HRESULT CertComponenteOut([out, retval] BSTR* pVal);
+		[propget, id(180), helpstring("property BITOut")] HRESULT BITOut([out, retval] BSTR* pVal);
+		[propget, id(190), helpstring("property TipoBiometriaOut")] HRESULT TipoBiometriaOut([out, retval] BYTE* pVal);
+		[id(197), helpstring("method ObtenerCertCAComponente")] HRESULT ObtenerCertCAComponente();
+		[propput, id(208), helpstring("property hashIn")] HRESULT hashIn([in] BSTR newVal);
+		[id(211), helpstring("method ObtenerVersionDNIe")] HRESULT ObtenerVersionDNIe();
+		[id(213), helpstring("method ObtenerVersionesLibrerias")] HRESULT ObtenerVersionesLibrerias();
+		[propget, id(214), helpstring("property ArrayVersionLibreriasLenOut")] HRESULT ArrayVersionLibreriasLenOut([out, retval] int* pVal);
+		[propget, id(215), helpstring("property VersionLibreriaOut")] HRESULT VersionLibreriaOut([in] int i, [out, retval] BSTR* pVal);
+		[propget, id(216), helpstring("property NombreLibreriaOut")] HRESULT NombreLibreriaOut([in] int i, [out, retval] BSTR* pVal);
+		[id(220), helpstring("method ObtenerDisplayMessage")] HRESULT ObtenerDisplayMessage();
+		[id(223), helpstring("method ObtenerCAN")] HRESULT ObtenerCAN();
+		[id(224), helpstring("method ObtenerMRZ")] HRESULT ObtenerMRZ();
+		[id(225), helpstring("method ObtenerClavePublicaEC")] HRESULT ObtenerClavePublicaEC();
+		[id(226), helpstring("method ObtenerClavePublicaECFirmada")] HRESULT ObtenerClavePublicaECFirmada();
+		[id(227), helpstring("method ObtenerTipoDocumento")] HRESULT ObtenerTipoDocumento();
+		[id(232), helpstring("method ObtenerCertificadoCV_CA")] HRESULT ObtenerCertificadoCV_CA();
+		[propput, id(244), helpstring("property CANLecturaIn")] HRESULT CANLecturaIn([in] BSTR newVal);
+		[propget, id(245), helpstring("property NombreOut")] HRESULT NombreOut([out, retval] BSTR* pVal);
+		[propget, id(246), helpstring("property Apellido1Out")] HRESULT Apellido1Out([out, retval] BSTR* pVal);
+		[propget, id(247), helpstring("property Apellido2Out")] HRESULT Apellido2Out([out, retval] BSTR* pVal);
+		[propget, id(248), helpstring("property NumeroDNIOut")] HRESULT NumeroDNIOut([out, retval] BSTR* pVal);
+		[propget, id(249), helpstring("property FechaNacimientoOut")] HRESULT FechaNacimientoOut([out, retval] BSTR* pVal);
+		[propget, id(250), helpstring("property NacionalidadOut")] HRESULT NacionalidadOut([out, retval] BSTR* pVal);
+		[propget, id(251), helpstring("property FechaExpiracionOut")] HRESULT FechaExpiracionOut([out, retval] BSTR* pVal);
+		[propget, id(252), helpstring("property SexoOut")] HRESULT SexoOut([out, retval] BSTR* pVal);
+		[propget, id(253), helpstring("property LocalidadNacimientoOut")] HRESULT LocalidadNacimientoOut([out, retval] BSTR* pVal);
+		[propget, id(254), helpstring("property ProvinciaNacimientoOut")] HRESULT ProvinciaNacimientoOut([out, retval] BSTR* pVal);
+		[propget, id(255), helpstring("property NombrePadresOut")] HRESULT NombrePadresOut([out, retval] BSTR* pVal);
+		[propget, id(256), helpstring("property DomicilioOut")] HRESULT DomicilioOut([out, retval] BSTR* pVal);
+		[propget, id(257), helpstring("property LocalidadDomicilioOut")] HRESULT LocalidadDomicilioOut([out, retval] BSTR* pVal);
+		[propget, id(258), helpstring("property ProvinciaDomicilioOut")] HRESULT ProvinciaDomicilioOut([out, retval] BSTR* pVal);
+		[propget, id(259), helpstring("property ImagenFacialOut")] HRESULT ImagenFacialOut([out, retval] BSTR* pVal);
+		[propget, id(260), helpstring("property ImagenFirmaOut")] HRESULT ImagenFirmaOut([out, retval] BSTR* pVal);
+};
+
+[
+	uuid(AF69F876-556E-401C-8184-198CA09BBC9C),
+	version(1.0),
+	helpstring("ActiveXDNIe 1.0 Type Library")
+]
+library ActiveXDNIeLib
+{
+	importlib("stdole2.tlb");
+
+	[
+		uuid(4BE64113-3A60-46FD-BA96-5BA52094E063),
+		helpstring("DLL_ADMIN Class")
+	]
+	coclass DLL_ADMIN
+	{
+		[default] interface IDLL_ADMIN;
+	};
+};

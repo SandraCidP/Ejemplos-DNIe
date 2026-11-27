@@ -1,0 +1,35 @@
+# Resultados de la compilación (scripts\compilar.cmd)
+bin/
+obj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.aps
+*.VC.db
+*.VC.opendb
+ipch/
+
+# Generados y binarios
+*.exe
+*.dll
+*.pdb
+*.ilk
+*.obj
+*.lib
+*.exp
+*.iobj
+*.ipdb
+*.res
+
+# Claves y certificados: nunca al repositorio
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Paquetes de la extensión para las tiendas
+*.zip
+*.xpi
+*.crx

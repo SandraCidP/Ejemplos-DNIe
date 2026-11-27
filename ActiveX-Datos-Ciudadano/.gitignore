@@ -1,0 +1,35 @@
+# Resultados de la compilación (scripts\compilar.cmd)
+Win32/
+x64/
+ARM64/
+Debug/
+Release/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.aps
+*.VC.db
+*.VC.opendb
+ipch/
+*.tlb
+
+# Generados y binarios
+*.dll
+*.exe
+*.pdb
+*.ilk
+*.obj
+*.lib
+*.exp
+*.iobj
+*.ipdb
+*.res
+
+# Claves y certificados: nunca al repositorio
+*.pem
+*.key
+*.p12
+*.pfx
+
